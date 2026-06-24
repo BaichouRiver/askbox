@@ -58,6 +58,7 @@ app.post('/api/questions', (req, res) => {
     answer: '',
     answered: false,
     public: isPublic === true,
+    communityAnswers: [],
   };
   data.questions.unshift(question);
   writeData(data);
@@ -77,8 +78,30 @@ app.get('/api/questions/public', (req, res) => {
       time: q.time,
       answered: q.answered,
       answer: q.answered ? q.answer : undefined,
+      communityAnswers: (q.communityAnswers || []).slice(-5).reverse(),
     }));
   res.json({ questions: list });
+});
+
+// Public: Add a community answer to a public question
+app.post('/api/questions/:id/community-answer', (req, res) => {
+  const { text, name } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: '请输入内容' });
+
+  const data = readData();
+  const id = parseInt(req.params.id);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
+
+  if (!q.communityAnswers) q.communityAnswers = [];
+  q.communityAnswers.push({
+    text: text.trim(),
+    name: (name || '').trim() || '匿名',
+    time: Date.now(),
+  });
+  writeData(data);
+  res.json({ success: true });
 });
 
 // Admin: Get all questions (requires admin token)
