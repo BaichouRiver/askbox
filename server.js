@@ -20,7 +20,7 @@ function ensureDataFile() {
     fs.writeFileSync(DATA_FILE, JSON.stringify({
       questions: [],
       nextId: 1,
-      name: '白河愁',
+      name: 'Baichou',
       password: 'admin123',
       cardBg: 'lavender',
       cardCustomColor: '#F5E8FF',
@@ -33,7 +33,7 @@ function readData() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
   } catch {
-    return { questions: [], nextId: 1, name: '白河愁', password: 'admin123', cardBg: 'lavender', cardCustomColor: '#F5E8FF' };
+    return { questions: [], nextId: 1, name: 'Baichou', password: 'admin123', cardBg: 'lavender', cardCustomColor: '#F5E8FF' };
   }
 }
 

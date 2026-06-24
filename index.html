@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>白河愁 · 提问箱</title>
+  <title>Baichou · 提问箱</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -468,7 +468,7 @@
   <div class="page active" id="page-ask">
     <div class="page-header" id="askPageHeader">
       <img class="avatar" id="askAvatar" src="avatar.jpg" alt="avatar" onclick="adminReveal()">
-      <h1>白河愁的提问箱</h1>
+      <h1>Baichou的提问箱</h1>
       <p>匿名提问 · 随心回答</p>
     </div>
 
@@ -561,7 +561,7 @@
         <div class="card-top">
           <img class="card-avatar" id="cardAvatar" src="avatar.jpg" alt="">
           <div>
-            <div class="card-name" id="cardName">白河愁</div>
+            <div class="card-name" id="cardName">Baichou</div>
             <div class="card-subtitle">匿名提问箱</div>
           </div>
         </div>
@@ -575,7 +575,7 @@
             <div class="card-a-text" id="cardAText">在这里写下你的回答……</div>
           </div>
         </div>
-        <div class="card-watermark" id="cardWatermark">白河愁 · 匿名提问箱</div>
+        <div class="card-watermark" id="cardWatermark">Baichou · 匿名提问箱</div>
       </div>
     </div>
 
@@ -604,7 +604,7 @@
       </div>
       <div class="settings-row">
         <label>昵称</label>
-        <input type="text" id="settingsName" value="白河愁" onchange="saveSettings()">
+        <input type="text" id="settingsName" value="Baichou" onchange="saveSettings()">
       </div>
     </div>
 
@@ -656,7 +656,7 @@
 
     let state = {
       questions: [],
-      name: '白河愁',
+      name: 'Baichou',
       password: 'admin123',
       cardBg: 'lavender',
       cardCustomColor: '#F5E8FF',
@@ -1163,7 +1163,7 @@
     }
 
     async function saveSettings() {
-      const name = document.getElementById('settingsName').value.trim() || '白河愁';
+      const name = document.getElementById('settingsName').value.trim() || 'Baichou';
       const pwd = document.getElementById('settingsPwd').value.trim() || 'admin123';
 
       const res = await api('/api/admin/settings', {
