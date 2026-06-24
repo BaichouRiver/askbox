@@ -466,8 +466,8 @@
 
   <!-- ===== PAGE: Ask ===== -->
   <div class="page active" id="page-ask">
-    <div class="page-header">
-      <img class="avatar" id="askAvatar" src="avatar.jpg" alt="avatar">
+    <div class="page-header" id="askPageHeader">
+      <img class="avatar" id="askAvatar" src="avatar.jpg" alt="avatar" onclick="adminReveal()">
       <h1>白河愁的提问箱</h1>
       <p>匿名提问 · 随心回答</p>
     </div>
@@ -629,15 +629,15 @@
       <span class="nav-icon">✉️</span>
       <span>提问</span>
     </div>
-    <div class="nav-item" data-page="admin" onclick="navigate('admin')">
-      <span class="nav-icon">📋</span>
-      <span>管理</span>
-    </div>
     <div class="nav-item" data-page="card" onclick="navigate('card')">
       <span class="nav-icon">🎨</span>
       <span>卡片</span>
     </div>
-    <div class="nav-item" data-page="settings" onclick="navigate('settings')">
+    <div class="nav-item admin-only" data-page="admin" onclick="navigate('admin')" style="display:none">
+      <span class="nav-icon">📋</span>
+      <span>管理</span>
+    </div>
+    <div class="nav-item admin-only" data-page="settings" onclick="navigate('settings')" style="display:none">
       <span class="nav-icon">⚙️</span>
       <span>设置</span>
     </div>
@@ -659,6 +659,27 @@
     };
 
     let adminToken = sessionStorage.getItem('askbox_admin_token') || '';
+    let adminRevealCount = 0;
+
+    function adminReveal() {
+      adminRevealCount++;
+      if (adminRevealCount >= 5) {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+        document.getElementById('askPageHeader').querySelector('p').textContent = '👤 管理入口已解锁';
+        adminRevealCount = 0;
+        setTimeout(() => {
+          document.getElementById('askPageHeader').querySelector('p').textContent = '匿名提问 · 随心回答';
+        }, 3000);
+      }
+    }
+
+    function showAdminNav() {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+    }
+
+    function hideAdminNav() {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
 
     async function api(path, options = {}) {
       const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -773,6 +794,7 @@
         state.password = pwd;
         document.getElementById('adminLogin').style.display = 'none';
         document.getElementById('adminDashboard').classList.add('active');
+        showAdminNav();
         await refreshState();
         renderAdminList();
         showToast('欢迎回来 👋');
@@ -787,6 +809,8 @@
       document.getElementById('adminLogin').style.display = 'flex';
       document.getElementById('adminDashboard').classList.remove('active');
       document.getElementById('adminPwd').value = '';
+      hideAdminNav();
+      navigate('ask');
     }
 
     async function refreshState() {
@@ -1250,6 +1274,7 @@
           if (res.success) {
             document.getElementById('adminLogin').style.display = 'none';
             document.getElementById('adminDashboard').classList.add('active');
+            showAdminNav();
             refreshState().then(() => renderAdminList());
           } else {
             adminToken = '';
