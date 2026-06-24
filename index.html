@@ -911,7 +911,7 @@
             <div class="q-header">
               <div>
                 <div class="q-text">${escHtml(q.text)}</div>
-                <div class="q-name">— ${escHtml(q.name)} · ${timeStr}</div>
+                <div class="q-name">— ${escHtml(q.name)} · ${timeStr} ${q.ip ? `<span style="font-size:11px;color:var(--text-muted)">IP: ${q.ip}</span>` : ''}</div>
               </div>
               <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
                 ${q.public ? '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#EEEBFF;color:#7C5CFC">🌐 公开</span>' : '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#F3F4F6;color:#6B7280">🔒 私密</span>'}

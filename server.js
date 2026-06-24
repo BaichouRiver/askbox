@@ -50,6 +50,7 @@ app.post('/api/questions', (req, res) => {
   if (!text || !text.trim()) return res.status(400).json({ error: '请输入问题内容' });
 
   const data = readData();
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
   const question = {
     id: data.nextId++,
     text: text.trim(),
@@ -58,6 +59,7 @@ app.post('/api/questions', (req, res) => {
     answer: '',
     answered: false,
     public: isPublic === true,
+    ip: ip.split(',')[0].trim(),
     communityAnswers: [],
   };
   data.questions.unshift(question);
@@ -94,11 +96,13 @@ app.post('/api/questions/:id/community-answer', (req, res) => {
   if (!q) return res.status(404).json({ error: '问题不存在' });
   if (!q.public) return res.status(403).json({ error: '该问题未公开' });
 
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
   if (!q.communityAnswers) q.communityAnswers = [];
   q.communityAnswers.push({
     text: text.trim(),
     name: (name || '').trim() || '匿名',
     time: Date.now(),
+    ip: ip.split(',')[0].trim(),
   });
   writeData(data);
   res.json({ success: true });
