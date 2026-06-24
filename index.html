@@ -477,11 +477,15 @@
         <label>✏️ 你有什么想问我的？</label>
         <textarea id="askInput" placeholder="在这里写下你的问题……(支持匿名)"></textarea>
         <input type="text" id="askName" placeholder="你的名字（选填，匿名即显示「匿名」）">
+        <label class="public-check" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text-light);cursor:pointer">
+          <input type="checkbox" id="askPublic" checked style="width:16px;height:16px;cursor:pointer">
+          公开这条提问（其他人可见）
+        </label>
         <button class="btn" onclick="submitQuestion()">✨ 发送提问</button>
       </div>
     </div>
 
-    <div class="recent-title">📌 最近提问</div>
+    <div class="recent-title">📌 公开提问</div>
     <div id="publicQuestions"></div>
   </div>
 
@@ -739,9 +743,10 @@
       const text = input.value.trim();
       if (!text) { showToast('请输入你的问题 😅'); return; }
 
+      const isPublic = document.getElementById('askPublic').checked;
       const res = await api('/api/questions', {
         method: 'POST',
-        body: JSON.stringify({ text, name: nameInput.value.trim() || '匿名' }),
+        body: JSON.stringify({ text, name: nameInput.value.trim() || '匿名', isPublic }),
       });
       if (res.success) {
         input.value = '';
@@ -864,7 +869,10 @@
                 <div class="q-text">${escHtml(q.text)}</div>
                 <div class="q-name">— ${escHtml(q.name)} · ${timeStr}</div>
               </div>
-              <span class="q-status ${statusClass}">${statusText}</span>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                ${q.public ? '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#EEEBFF;color:#7C5CFC">🌐 公开</span>' : '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#F3F4F6;color:#6B7280">🔒 私密</span>'}
+                <span class="q-status ${statusClass}">${statusText}</span>
+              </div>
             </div>
             ${q.answered ? `<div class="q-answer"><div class="q-answer-label">💬 你的回答</div>${escHtml(q.answer)}</div>` : ''}
             <div class="q-actions">
@@ -872,6 +880,7 @@
               <div class="btn-row">
                 <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();saveAnswer(${q.id})">💾 保存回答</button>
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();deleteQuestion(${q.id})">🗑️ 删除</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();toggleVisibility(${q.id})">${q.public ? '🔒 设为私密' : '🌐 设为公开'}</button>
                 <button class="btn btn-sm" style="background:var(--primary);color:white" onclick="event.stopPropagation();saveAndMakeCard(${q.id})">🎨 制作卡片</button>
               </div>
             </div>
@@ -899,6 +908,15 @@
         renderAdminList();
       } else {
         showToast(res.error || '保存失败');
+      }
+    }
+
+    async function toggleVisibility(id) {
+      const res = await api('/api/admin/questions/' + id + '/toggle-visibility', { method: 'POST' });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast(res.public ? '🌐 已设为公开' : '🔒 已设为私密');
       }
     }
 
@@ -952,6 +970,7 @@
         body: JSON.stringify({
           text: prompts[Math.floor(Math.random() * prompts.length)],
           name: randomName,
+          isPublic: false,
         }),
       });
       if (res.success) {

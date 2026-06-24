@@ -46,7 +46,7 @@ function writeData(data) {
 
 // Public: Submit a question
 app.post('/api/questions', (req, res) => {
-  const { text, name } = req.body;
+  const { text, name, isPublic } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: '请输入问题内容' });
 
   const data = readData();
@@ -57,23 +57,27 @@ app.post('/api/questions', (req, res) => {
     time: Date.now(),
     answer: '',
     answered: false,
+    public: isPublic === true,
   };
   data.questions.unshift(question);
   writeData(data);
   res.json({ success: true, question });
 });
 
-// Public: Get public questions (first 50, show answered ones)
+// Public: Get ONLY public questions
 app.get('/api/questions/public', (req, res) => {
   const data = readData();
-  const list = data.questions.slice(0, 50).map(q => ({
-    id: q.id,
-    text: q.text,
-    name: q.name,
-    time: q.time,
-    answered: q.answered,
-    answer: q.answered ? q.answer : undefined,
-  }));
+  const list = data.questions
+    .filter(q => q.public)
+    .slice(0, 50)
+    .map(q => ({
+      id: q.id,
+      text: q.text,
+      name: q.name,
+      time: q.time,
+      answered: q.answered,
+      answer: q.answered ? q.answer : undefined,
+    }));
   res.json({ questions: list });
 });
 
@@ -119,6 +123,21 @@ app.post('/api/admin/questions/:id/answer', (req, res) => {
   q.answered = true;
   writeData(data);
   res.json({ success: true, question: q });
+});
+
+// Admin: Toggle question visibility
+app.post('/api/admin/questions/:id/toggle-visibility', (req, res) => {
+  const token = req.headers['admin-token'];
+  const data = readData();
+  if (token !== data.password) return res.status(401).json({ error: '未授权' });
+
+  const id = parseInt(req.params.id);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+
+  q.public = !q.public;
+  writeData(data);
+  res.json({ success: true, public: q.public });
 });
 
 // Admin: Delete a question
