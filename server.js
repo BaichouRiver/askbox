@@ -14,17 +14,25 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
 // ===== Data Layer =====
+const SEED_FILE = path.join(__dirname, 'db.seed.json');
+
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({
-      questions: [],
-      nextId: 1,
-      name: 'Baichou',
-      password: 'admin123',
-      cardBg: 'lavender',
-      cardCustomColor: '#F5E8FF',
-    }, null, 2));
+    // Try seed file first (for Railway Volume first-deploy scenario)
+    if (fs.existsSync(SEED_FILE)) {
+      fs.copyFileSync(SEED_FILE, DATA_FILE);
+      console.log('📄 Copied seed data to data/db.json');
+    } else {
+      fs.writeFileSync(DATA_FILE, JSON.stringify({
+        questions: [],
+        nextId: 1,
+        name: 'Baichou',
+        password: 'admin123',
+        cardBg: 'lavender',
+        cardCustomColor: '#F5E8FF',
+      }, null, 2));
+    }
   }
 }
 
@@ -185,9 +193,17 @@ app.put('/api/admin/settings', (req, res) => {
   const data = readData();
   if (token !== data.password) return res.status(401).json({ error: '未授权' });
 
-  const { name, password, cardBg, cardCustomColor } = req.body;
+  const { name, password, oldPassword, cardBg, cardCustomColor } = req.body;
+
+  // If changing password, require old password verification
+  if (password && password !== data.password) {
+    if (!oldPassword || oldPassword !== data.password) {
+      return res.status(403).json({ error: '旧密码错误，修改密码失败' });
+    }
+    data.password = password;
+  }
+
   if (name) data.name = name;
-  if (password) data.password = password;
   if (cardBg) data.cardBg = cardBg;
   if (cardCustomColor) data.cardCustomColor = cardCustomColor;
   writeData(data);

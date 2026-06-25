@@ -219,6 +219,8 @@
       box-shadow: var(--card-shadow);
       cursor: pointer; transition: all 0.2s;
     }
+    .q-item .q-clickable { cursor: pointer; }
+    .q-item .q-no-click { cursor: default; }
     .q-item:active { transform: scale(0.99); }
     .q-item .q-header {
       display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;
@@ -612,7 +614,7 @@
       <h3>安全</h3>
       <div class="settings-row">
         <label>密码</label>
-        <input type="text" id="settingsPwd" value="admin123" onchange="saveSettings()">
+        <input type="password" id="settingsPwd" placeholder="留空则不修改" onchange="saveSettings()">
       </div>
     </div>
 
@@ -907,19 +909,21 @@
         const statusClass = q.answered ? 'answered' : 'pending';
         const statusText = q.answered ? '✅ 已回复' : '⏳ 待回复';
         return `
-          <div class="q-item ${q.answered ? 'answered' : ''}" data-id="${q.id}" onclick="toggleExpand(${q.id})">
-            <div class="q-header">
-              <div>
-                <div class="q-text">${escHtml(q.text)}</div>
-                <div class="q-name">— ${escHtml(q.name)} · ${timeStr} ${q.ip ? `<span style="font-size:11px;color:var(--text-muted)">IP: ${q.ip}</span>` : ''}</div>
+          <div class="q-item ${q.answered ? 'answered' : ''}" data-id="${q.id}">
+            <div class="q-clickable" onclick="toggleExpand(${q.id})">
+              <div class="q-header">
+                <div>
+                  <div class="q-text">${escHtml(q.text)}</div>
+                  <div class="q-name">— ${escHtml(q.name)} · ${timeStr} ${q.ip ? `<span style="font-size:11px;color:var(--text-muted)">IP: ${q.ip}</span>` : ''}</div>
+                </div>
+                <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                  ${q.public ? '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#EEEBFF;color:#7C5CFC">🌐 公开</span>' : '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#F3F4F6;color:#6B7280">🔒 私密</span>'}
+                  <span class="q-status ${statusClass}">${statusText}</span>
+                </div>
               </div>
-              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-                ${q.public ? '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#EEEBFF;color:#7C5CFC">🌐 公开</span>' : '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#F3F4F6;color:#6B7280">🔒 私密</span>'}
-                <span class="q-status ${statusClass}">${statusText}</span>
-              </div>
+              ${q.answered ? `<div class="q-answer"><div class="q-answer-label">💬 你的回答</div>${escHtml(q.answer)}</div>` : ''}
             </div>
-            ${q.answered ? `<div class="q-answer"><div class="q-answer-label">💬 你的回答</div>${escHtml(q.answer)}</div>` : ''}
-            <div class="q-actions">
+            <div class="q-actions" onclick="event.stopPropagation()">
               <textarea id="answerInput_${q.id}" placeholder="写下你的回答……">${q.answer || ''}</textarea>
               <div class="btn-row">
                 <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();saveAnswer(${q.id})">💾 保存回答</button>
@@ -935,7 +939,9 @@
 
     function toggleExpand(id) {
       const el = document.querySelector(`.q-item[data-id="${id}"]`);
-      if (el) el.classList.toggle('expanded');
+      if (!el) return;
+      // Only toggle if click was on the clickable area, not on buttons/textarea
+      el.classList.toggle('expanded');
     }
 
     async function saveAnswer(id) {
@@ -1208,25 +1214,33 @@
 
     async function saveSettings() {
       const name = document.getElementById('settingsName').value.trim() || 'Baichou';
-      const pwd = document.getElementById('settingsPwd').value.trim() || 'admin123';
+      const pwd = document.getElementById('settingsPwd').value.trim();
+
+      const body = { name, cardBg: state.cardBg, cardCustomColor: state.cardCustomColor };
+
+      // If new password entered, send it with old password verification
+      if (pwd && pwd !== state.password) {
+        body.password = pwd;
+        body.oldPassword = adminToken;
+      }
 
       const res = await api('/api/admin/settings', {
         method: 'PUT',
-        body: JSON.stringify({
-          name,
-          password: pwd !== adminToken ? pwd : undefined,
-          cardBg: state.cardBg,
-          cardCustomColor: state.cardCustomColor,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (res.success) {
         state.name = name;
-        if (pwd !== adminToken) state.password = pwd;
-        adminToken = pwd;
-        sessionStorage.setItem('askbox_admin_token', pwd);
+        if (pwd && pwd !== state.password) {
+          state.password = pwd;
+          adminToken = pwd;
+          sessionStorage.setItem('askbox_admin_token', pwd);
+          document.getElementById('settingsPwd').value = '';
+          showToast('✅ 密码已更新');
+        } else {
+          showToast('✅ 设置已保存');
+        }
         applySettings();
-        showToast('✅ 设置已保存');
       } else {
         showToast(res.error || '保存失败');
       }
@@ -1296,7 +1310,7 @@
       });
       document.getElementById('cardWatermark').textContent = state.name + ' · 匿名提问箱';
       document.getElementById('settingsName').value = state.name;
-      document.getElementById('settingsPwd').value = state.password;
+      document.getElementById('settingsPwd').value = '';
 
       if (state._avatarDataUrl) {
         document.querySelectorAll('img[id$="Avatar"], img.avatar').forEach(img => {

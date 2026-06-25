@@ -1,0 +1,424 @@
+{
+  "questions": [
+    {
+      "id": 36,
+      "text": "我喜欢你 认真的 可是你有女朋友了",
+      "name": "匿名",
+      "time": 1782314896794,
+      "answer": "…我哪里有女朋友",
+      "answered": true,
+      "public": false,
+      "ip": "211.90.254.40",
+      "communityAnswers": []
+    },
+    {
+      "id": 35,
+      "text": "我喜欢你 认真的 可是你现在有女朋友了 哎",
+      "name": "匿名",
+      "time": 1782314836621,
+      "answer": "别捉弄哥们了大哥",
+      "answered": true,
+      "public": false,
+      "ip": "211.90.254.40",
+      "communityAnswers": []
+    },
+    {
+      "id": 34,
+      "text": "是这样的，我喜欢一个女生，她人很漂亮，对我和其他人都很好，我会偷偷看她，每次她和我几个朋友说笑我都会感觉胸口一紧很难受，但我又没什么优点，没有可以夸奖的地方，我是不是应该放弃这段感情，好痛苦",
+      "name": "匿名",
+      "time": 1782313053248,
+      "answer": "你的痛苦来源于无法证明自己的价值，你认为自己没有值得被人爱的地方，但我来看，你有很多优秀的地方，你很温柔有礼貌，会克制自己，有对自己的思考反思，能够正视自己的人，才能和人搭建长久和谐的关系。如果逃避这个问题，即使你放弃了这段感情，下次也会有同样的问题。对自己多有点自信吧，不要给自己留下遗憾，做了可能会后悔，但不做肯定会后悔。",
+      "answered": true,
+      "public": true,
+      "ip": "39.189.42.182",
+      "communityAnswers": [
+        {
+          "text": "谢谢",
+          "name": "匿名",
+          "time": 1782316710947,
+          "ip": "39.189.42.182"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "text": "为啥我的问题没了",
+      "name": "匿名",
+      "time": 1782312772176,
+      "answer": "更新过一次，历史记录没了",
+      "answered": true,
+      "public": true,
+      "ip": "39.185.219.138",
+      "communityAnswers": []
+    },
+    {
+      "id": 31,
+      "text": "你是谁",
+      "name": "匿名",
+      "time": 1782311817473,
+      "answer": "chn啊我是谁= =",
+      "answered": true,
+      "public": true,
+      "ip": "39.188.217.198",
+      "communityAnswers": []
+    },
+    {
+      "id": 30,
+      "text": "到现在为止，你最遗憾的一件事是什么？",
+      "name": "匿名",
+      "time": 1782311459935,
+      "answer": "我最遗憾没能坚持到底",
+      "answered": true,
+      "public": true,
+      "ip": "39.189.42.182",
+      "communityAnswers": []
+    },
+    {
+      "id": 29,
+      "text": "对未来感到迷茫，不知道该选择哪条路，怕走错一步耽误一生",
+      "name": "匿名",
+      "time": 1782311428317,
+      "answer": "做好当下最合理的选择，不要一个人钻牛角尖，集思广益，先行动，再贯彻到底，这是做成难题唯一的办法。",
+      "answered": true,
+      "public": true,
+      "ip": "39.189.42.182",
+      "communityAnswers": []
+    },
+    {
+      "id": 28,
+      "text": "我的刀???",
+      "name": "匿名",
+      "time": 1782305783382,
+      "answer": "比比拉布",
+      "answered": true,
+      "public": false,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 27,
+      "text": "收到的问题多吗",
+      "name": "匿名",
+      "time": 1782305735098,
+      "answer": "挺多的，25条左右了",
+      "answered": true,
+      "public": false,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 26,
+      "text": "不用回答，看到这个问题，在心里想5个爱的人，闭上眼睛感受42秒",
+      "name": "匿名",
+      "time": 1782300954648,
+      "answer": "想完了，原谅我愣了一下我能选哪五个…",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 25,
+      "text": "你最爱的三首不同语言的歌曲",
+      "name": "匿名",
+      "time": 1782300752169,
+      "answer": "参考现在的口味，中文《轮回之境》，英文《The Other Side Of Paradise，日文是《 Shangri-La》",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 24,
+      "text": "他人对你的哪方面感到好奇，使你最抗拒不满？",
+      "name": "匿名",
+      "time": 1782300643396,
+      "answer": "严格来说，我对感兴趣的人没有抗拒的话题，硬要说的话，是我的错误，我可以接受但我没有深究的兴致，我会自己反省",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 23,
+      "text": "他人对你的哪方面感到好奇，使你最愿意滔滔不绝？",
+      "name": "匿名",
+      "time": 1782300456354,
+      "answer": "我的性癖，例如微微勒肉的袜子",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": [
+        {
+          "text": "展开讲讲",
+          "name": "匿名",
+          "time": 1782305511747,
+          "ip": "223.104.161.216"
+        },
+        {
+          "text": "微微勒肉的袜子",
+          "name": "白愁",
+          "time": 1782309518042,
+          "ip": "39.189.42.182"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "text": "关于最近的社会新闻，任选一个表达你的看法",
+      "name": "匿名",
+      "time": 1782300333881,
+      "answer": "什么叫G7峰会上懂王舌战三英啊？果然现实只会比艺术更魔幻吗",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 21,
+      "text": "你真正爱的事或物，请回答三个",
+      "name": "匿名",
+      "time": 1782300289059,
+      "answer": "从重要程度排序分别是：充满希望的生活；毫无保留，可以坦诚相待珍惜彼此的关系；健康的身体。",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 20,
+      "text": "你最沉重和最轻缓的哀愁是？",
+      "name": "匿名",
+      "time": 1782300240319,
+      "answer": "嗯…看到这个问题沉思了很久，大概是生离死别吧，亲人离开的当天感觉人很麻木，当电话打到我手机上的时候电流从头顶传递到脊梁，一整天没有说过话，从早上开始始终怀疑是自己的梦吧，触摸到亲人冰冷的手才渐渐抛掉幻想了。人还是要向前的，现在身上戴着的亲人的遗物，始终压着我的心头。抱歉我回答不下去了。",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 19,
+      "text": "最近一次忧郁，是因为什么？",
+      "name": "匿名",
+      "time": 1782300199554,
+      "answer": "应该是觉得自己和以前的自己不太一样了吧，开始说不出有意思的话了，对其他人缺少热情和耐心，渐渐变成自己陌生的样子了，但又对过去的自己感到失望和遗憾，认为现在的自己一定可以做出更加正确明智的选择，或许结局就会不一样了，渐渐对自己的价值产生动摇了吧。",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 18,
+      "text": "昨天今天明天晚饭吃的什么",
+      "name": "匿名",
+      "time": 1782298356518,
+      "answer": "昨天家里葱油花蛤烤鸭生菜，今天加班还没吃，明天我咋知道",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 16,
+      "text": "上一次看片看的什么",
+      "name": "匿名",
+      "time": 1782296655816,
+      "answer": "禁欲两周了",
+      "answered": true,
+      "public": true,
+      "ip": "39.185.219.138",
+      "communityAnswers": []
+    },
+    {
+      "id": 15,
+      "text": "你是嘉豪吗",
+      "name": "匿名",
+      "time": 1782296362070,
+      "answer": "那我必须是啊",
+      "answered": true,
+      "public": false,
+      "ip": "211.90.254.40",
+      "communityAnswers": []
+    },
+    {
+      "id": 14,
+      "text": "开始你的忏悔",
+      "name": "上帝",
+      "time": 1782296341992,
+      "answer": "我错了",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 13,
+      "text": "你的内心是怎样。",
+      "name": "卡密",
+      "time": 1782296328264,
+      "answer": "如果可以选的话，我希望我的内心是一片生着花，泛着美丽涟漪的蓝色湖泊，天色渐暗偶有晚风拂过，实际可能只是一滩死水，嗯。",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 12,
+      "text": "几点来健身",
+      "name": "郑坤",
+      "time": 1782296268001,
+      "answer": "今天加班歇一天",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.160.165",
+      "communityAnswers": []
+    },
+    {
+      "id": 11,
+      "text": "怎么做的？给我做一个提问箱",
+      "name": "匿名",
+      "time": 1782296061479,
+      "answer": "先这样在那样最后这样（确信），好吧可以啊，私信我教你",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 10,
+      "text": "你的心选有提问吗",
+      "name": "匿名",
+      "time": 1782295981669,
+      "answer": "真的全匿名…我咋知道",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 9,
+      "text": "可以当博主",
+      "name": "匿名",
+      "time": 1782295907343,
+      "answer": "后续会精选值得分享的提问发的",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 8,
+      "text": "你很有解答欲啊",
+      "name": "匿名",
+      "time": 1782295886384,
+      "answer": "是的，感觉很有意思，而且一定要完全未知才有意思",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 7,
+      "text": "我去",
+      "name": "匿名",
+      "time": 1782295865831,
+      "answer": "去我",
+      "answered": true,
+      "public": true,
+      "ip": "223.104.161.216",
+      "communityAnswers": []
+    },
+    {
+      "id": 6,
+      "text": "一天几次飞机",
+      "name": "匿名",
+      "time": 1782295033869,
+      "answer": "禁yang欲wei两周了",
+      "answered": true,
+      "public": true,
+      "ip": "115.215.78.195",
+      "communityAnswers": [
+        {
+          "text": "草泥马",
+          "name": "匿名",
+          "time": 1782297938244,
+          "ip": "211.90.254.40"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "text": "我是神",
+      "name": "匿名",
+      "time": 1782295021480,
+      "answer": "好的卡密sama",
+      "answered": true,
+      "public": true,
+      "ip": "122.234.134.126",
+      "communityAnswers": []
+    },
+    {
+      "id": 4,
+      "text": "你是太无聊了吗",
+      "name": "匿名",
+      "time": 1782294290918,
+      "answer": "你咋这么聪明呢？带着id可以找我领pdd砍一刀",
+      "answered": true,
+      "public": true,
+      "ip": "104.249.174.142",
+      "communityAnswers": []
+    },
+    {
+      "id": 3,
+      "text": "喜欢的食物",
+      "name": "匿名",
+      "time": 1782294146570,
+      "answer": "咖喱吧，葱油的食物，不喜欢很干巴的",
+      "answered": true,
+      "public": true,
+      "ip": "104.249.174.142",
+      "communityAnswers": []
+    },
+    {
+      "id": 2,
+      "text": "测试公开题目用",
+      "name": "管理员白愁",
+      "time": 1782293949445,
+      "answer": "另外当作公告使用了\n1.该提问箱保证完全匿名\n2.骚扰等不良内容会定期清理，请健康交流\n3.回答为作者的主观意见，仅供参考，解释权归作者所有。\n4.请尽量保证提问的真诚与营养，本人保证会付出同样的感情与思考回答。\n5.定期对精选提问在平台上进行展示。",
+      "answered": true,
+      "public": true,
+      "ip": "104.249.174.142",
+      "communityAnswers": [
+        {
+          "text": "不准测试",
+          "name": "匿名",
+          "time": 1782293965710,
+          "ip": "104.249.174.142"
+        },
+        {
+          "text": "不准测试",
+          "name": "匿名",
+          "time": 1782295044473,
+          "ip": "122.234.134.126"
+        },
+        {
+          "text": "什么平台",
+          "name": "匿名",
+          "time": 1782300768813,
+          "ip": "223.104.161.216"
+        },
+        {
+          "text": "dy或者puq之类的吧",
+          "name": "白愁",
+          "time": 1782309573699,
+          "ip": "39.189.42.182"
+        }
+      ]
+    }
+  ],
+  "nextId": 37,
+  "name": "白河愁",
+  "password": "admin123",
+  "cardBg": "lavender",
+  "cardCustomColor": "#F5E8FF"
+}
