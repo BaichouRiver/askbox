@@ -270,7 +270,7 @@ app.post('/api/admin/upload', (req, res) => {
 
   fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
 
-  const url = `/uploads/\${filename}`;
+  const url = '/uploads/' + filename;
   const key = type + 'Image';
   data[key] = url;
   writeData(data);
@@ -279,6 +279,7 @@ app.post('/api/admin/upload', (req, res) => {
 });
 
 // Admin: Update settings
+app.put('/api/admin/settings', (req, res) => {
   const token = req.headers['admin-token'];
   const data = readData();
   if (token !== data.password) return res.status(401).json({ error: '未授权' });
