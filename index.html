@@ -550,6 +550,7 @@
         <div class="bg-opt mint" data-bg="mint" onclick="selectBg('mint',this)" title="薄荷"></div>
         <div class="bg-opt pink" data-bg="pink" onclick="selectBg('pink',this)" title="粉彩"></div>
         <div class="bg-opt ice" data-bg="ice" onclick="selectBg('ice',this)" title="冰蓝"></div>
+        <button class="bg-opt" id="cardImgBgBtn" onclick="selectBg('image',this)" title="自定义图片" style="background:linear-gradient(135deg,#E8E8E8,#F5F5F5);display:flex;align-items:center;justify-content:center;font-size:16px">🖼</button>
       </div>
       <div class="color-row">
         <input type="color" id="customColor" value="#F5E8FF" onchange="setCustomBg(this.value)">
@@ -623,6 +624,32 @@
     </div>
 
     <div class="settings-section">
+      <h3>自定义背景</h3>
+      <div class="settings-row">
+        <label>提问箱背景</label>
+        <div style="flex:1">
+          <div id="bgPreview" style="width:100%;height:80px;border-radius:10px;background:var(--gradient-1);background-size:cover;background-position:center;margin-bottom:6px;border:1px solid var(--border)"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('bgUploadInput').click()" style="flex:1">🖼️ 上传图片</button>
+            <button class="btn btn-sm btn-outline" id="bgRemoveBtn" onclick="removeBgImage()" style="display:none">✕ 移除</button>
+          </div>
+          <input type="file" id="bgUploadInput" accept="image/*" style="display:none" onchange="uploadBgImage('bg', this)">
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>卡片背景</label>
+        <div style="flex:1">
+          <div id="cardBgPreview" style="width:100%;height:80px;border-radius:10px;background:var(--gradient-1);background-size:cover;background-position:center;margin-bottom:6px;border:1px solid var(--border)"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cardBgUploadInput').click()" style="flex:1">🖼️ 上传图片</button>
+            <button class="btn btn-sm btn-outline" id="cardBgRemoveBtn" onclick="removeCardBgImage()" style="display:none">✕ 移除</button>
+          </div>
+          <input type="file" id="cardBgUploadInput" accept="image/*" style="display:none" onchange="uploadBgImage('cardBg', this)">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h3>数据</h3>
       <div style="display:flex;gap:8px">
         <button class="btn btn-sm btn-secondary" onclick="exportData()">📦 导出数据</button>
@@ -666,6 +693,8 @@
       password: 'admin123',
       cardBg: 'lavender',
       cardCustomColor: '#F5E8FF',
+      bgImage: null,
+      cardBgImage: null,
     };
 
     let adminToken = sessionStorage.getItem('askbox_admin_token') || '';
@@ -708,6 +737,8 @@
         state.name = settings.name;
         state.cardBg = settings.cardBg || 'lavender';
         state.cardCustomColor = settings.cardCustomColor || '#F5E8FF';
+        state.bgImage = settings.bgImage || null;
+        state.cardBgImage = settings.cardBgImage || null;
         applySettings();
       }
       renderPublicQuestions();
@@ -919,6 +950,8 @@
         state.name = res.name;
         state.cardBg = res.cardBg || 'lavender';
         state.cardCustomColor = res.cardCustomColor || '#F5E8FF';
+        state.bgImage = res.bgImage || null;
+        state.cardBgImage = res.cardBgImage || null;
       }
     }
 
@@ -1174,6 +1207,11 @@
       const card = document.getElementById('answerCard');
       if (currentBg === 'custom') {
         card.style.background = state.cardCustomColor || '#F5E8FF';
+      } else if (currentBg === 'image' && state.cardBgImage) {
+        card.style.background = '';
+        card.style.backgroundImage = 'url(' + state.cardBgImage + ')';
+        card.style.backgroundSize = 'cover';
+        card.style.backgroundPosition = 'center';
       } else {
         card.style.background = bgMap[currentBg] || bgMap.lavender;
       }
@@ -1298,6 +1336,55 @@
       reader.readAsDataURL(file);
     }
 
+    // ============================================================
+    //  BACKGROUND IMAGES
+    // ============================================================
+
+    async function uploadBgImage(type, input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('图片太大，请小于 5MB');
+        input.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const res = await api('/api/admin/upload', {
+          method: 'POST',
+          body: JSON.stringify({ image: e.target.result, type }),
+        });
+        if (res.success) {
+          if (type === 'bg') {
+            state.bgImage = res.url;
+          } else {
+            state.cardBgImage = res.url;
+          }
+          showToast('✅ 背景已更新');
+          applySettings();
+        } else {
+          showToast(res.error || '上传失败');
+        }
+        input.value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeBgImage() {
+      if (!confirm('确定移除提问箱背景图片？')) return;
+      state.bgImage = null;
+      applySettings();
+      showToast('✅ 背景已移除');
+    }
+
+    function removeCardBgImage() {
+      if (!confirm('确定移除卡片背景图片？')) return;
+      state.cardBgImage = null;
+      applySettings();
+      showToast('✅ 卡片背景已移除');
+    }
+
     async function saveSettings() {
       const name = document.getElementById('settingsName').value.trim() || 'Baichou';
       const pwd = document.getElementById('settingsPwd').value.trim();
@@ -1402,6 +1489,51 @@
         document.querySelectorAll('img[id$="Avatar"], img.avatar').forEach(img => {
           img.src = state._avatarDataUrl;
         });
+      }
+
+      // Apply custom background images
+      const bgPreview = document.getElementById('bgPreview');
+      if (bgPreview) {
+        if (state.bgImage) {
+          bgPreview.style.background = '';
+          bgPreview.style.backgroundImage = 'url(' + state.bgImage + ')';
+          bgPreview.style.backgroundSize = 'cover';
+          bgPreview.style.backgroundPosition = 'center';
+          document.getElementById('bgRemoveBtn').style.display = 'block';
+        } else {
+          bgPreview.style.backgroundImage = '';
+          bgPreview.style.background = 'var(--gradient-1)';
+          document.getElementById('bgRemoveBtn').style.display = 'none';
+        }
+      }
+      const cardBgPreview = document.getElementById('cardBgPreview');
+      if (cardBgPreview) {
+        if (state.cardBgImage) {
+          cardBgPreview.style.background = '';
+          cardBgPreview.style.backgroundImage = 'url(' + state.cardBgImage + ')';
+          cardBgPreview.style.backgroundSize = 'cover';
+          cardBgPreview.style.backgroundPosition = 'center';
+          document.getElementById('cardBgRemoveBtn').style.display = 'block';
+        } else {
+          cardBgPreview.style.backgroundImage = '';
+          cardBgPreview.style.background = 'var(--gradient-1)';
+          document.getElementById('cardBgRemoveBtn').style.display = 'none';
+        }
+      }
+
+      // Apply bg image to page background
+      const pageAsk = document.getElementById('page-ask');
+      if (pageAsk) {
+        if (state.bgImage) {
+          pageAsk.style.backgroundImage = 'url(' + state.bgImage + ')';
+          pageAsk.style.backgroundSize = 'cover';
+          pageAsk.style.backgroundPosition = 'center';
+          pageAsk.style.backgroundAttachment = 'fixed';
+          pageAsk.style.minHeight = '100vh';
+        } else {
+          pageAsk.style.backgroundImage = '';
+          pageAsk.style.backgroundAttachment = '';
+        }
       }
 
       if (state.cardBg && state.cardBg !== 'custom') {

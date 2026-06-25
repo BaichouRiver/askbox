@@ -8,16 +8,20 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const DATA_DIR = path.join(__dirname, 'data');
 
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+
 // ===== Middleware =====
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname)));
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ===== Data Layer =====
 const SEED_FILE = path.join(__dirname, 'db.seed.json');
 
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   if (!fs.existsSync(DATA_FILE)) {
     // Try seed file first (for Railway Volume first-deploy scenario)
     if (fs.existsSync(SEED_FILE)) {
@@ -184,6 +188,8 @@ app.get('/api/admin/questions', (req, res) => {
     name: data.name,
     cardBg: data.cardBg,
     cardCustomColor: data.cardCustomColor,
+    bgImage: data.bgImage || null,
+    cardBgImage: data.cardBgImage || null,
   });
 });
 
@@ -244,8 +250,35 @@ app.delete('/api/admin/questions/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Admin: Upload a background image
+app.post('/api/admin/upload', (req, res) => {
+  const token = req.headers['admin-token'];
+  const data = readData();
+  if (token !== data.password) return res.status(401).json({ error: '未授权' });
+
+  const { image, type } = req.body;
+  if (!image || !type) return res.status(400).json({ error: '缺少图片数据' });
+
+  // Validate image type
+  const matches = image.match(/^data:image\/(jpeg|png|gif|webp);base64,(.+)$/i);
+  if (!matches) return res.status(400).json({ error: '图片格式不支持，请使用 jpg/png/gif/webp' });
+
+  const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+  const base64Data = matches[2];
+  const filename = 'bg_' + type + '_' + Date.now() + '.' + ext;
+  const filepath = path.join(UPLOAD_DIR, filename);
+
+  fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
+
+  const url = `/uploads/\${filename}`;
+  const key = type + 'Image';
+  data[key] = url;
+  writeData(data);
+
+  res.json({ success: true, url });
+});
+
 // Admin: Update settings
-app.put('/api/admin/settings', (req, res) => {
   const token = req.headers['admin-token'];
   const data = readData();
   if (token !== data.password) return res.status(401).json({ error: '未授权' });
@@ -264,13 +297,13 @@ app.put('/api/admin/settings', (req, res) => {
   if (cardBg) data.cardBg = cardBg;
   if (cardCustomColor) data.cardCustomColor = cardCustomColor;
   writeData(data);
-  res.json({ success: true });
+  res.json({ success: true, bgImage: data.bgImage || null, cardBgImage: data.cardBgImage || null });
 });
 
 // Admin: Get settings (public-safe data)
 app.get('/api/settings', (req, res) => {
   const data = readData();
-  res.json({ name: data.name, cardBg: data.cardBg, cardCustomColor: data.cardCustomColor });
+  res.json({ name: data.name, cardBg: data.cardBg, cardCustomColor: data.cardCustomColor, bgImage: data.bgImage || null, cardBgImage: data.cardBgImage || null });
 });
 
 // ===== Start Server =====
