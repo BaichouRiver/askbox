@@ -69,6 +69,7 @@ app.post('/api/questions', (req, res) => {
     public: isPublic === true,
     ip: ip.split(',')[0].trim(),
     communityAnswers: [],
+    followUps: [],
   };
   data.questions.unshift(question);
   writeData(data);
@@ -89,6 +90,12 @@ app.get('/api/questions/public', (req, res) => {
       answered: q.answered,
       answer: q.answered ? q.answer : undefined,
       communityAnswers: (q.communityAnswers || []).slice(-5).reverse(),
+      followUps: (q.followUps || []).filter(f => f.answered).map(f => ({
+        text: f.text,
+        name: f.name,
+        time: f.time,
+        answer: f.answer,
+      })),
     }));
   res.json({ questions: list });
 });
@@ -112,6 +119,56 @@ app.post('/api/questions/:id/community-answer', (req, res) => {
     time: Date.now(),
     ip: ip.split(',')[0].trim(),
   });
+  writeData(data);
+  res.json({ success: true });
+});
+
+// Public: Add a follow-up question to an answered question
+app.post('/api/questions/:id/followup', (req, res) => {
+  const { text, name } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: '请输入追问内容' });
+
+  const data = readData();
+  const id = parseInt(req.params.id);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
+  if (!q.answered) return res.status(400).json({ error: '该问题还未回答，暂时不能追问' });
+
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  if (!q.followUps) q.followUps = [];
+  q.followUps.push({
+    id: (q.followUps.length + 1),
+    text: text.trim(),
+    name: (name || '').trim() || '匿名',
+    time: Date.now(),
+    answer: '',
+    answered: false,
+    ip: ip.split(',')[0].trim(),
+  });
+  writeData(data);
+  res.json({ success: true });
+});
+
+// Admin: Answer a follow-up question
+app.post('/api/admin/questions/:id/followup/:fid/answer', (req, res) => {
+  const token = req.headers['admin-token'];
+  const data = readData();
+  if (token !== data.password) return res.status(401).json({ error: '未授权' });
+
+  const id = parseInt(req.params.id);
+  const fid = parseInt(req.params.fid);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+
+  const fu = (q.followUps || []).find(f => f.id === fid);
+  if (!fu) return res.status(404).json({ error: '追问不存在' });
+
+  const { answer } = req.body;
+  if (!answer || !answer.trim()) return res.status(400).json({ error: '请输入回答' });
+
+  fu.answer = answer.trim();
+  fu.answered = true;
   writeData(data);
   res.json({ success: true });
 });
