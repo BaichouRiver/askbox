@@ -139,7 +139,13 @@ app.post('/api/questions/:id/followup', (req, res) => {
   if (!q.public) return res.status(403).json({ error: '该问题未公开' });
   if (!q.answered) return res.status(400).json({ error: '该问题还未回答，暂时不能追问' });
 
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  // Only the original asker can follow up (using IP verification)
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const originalIp = (q.ip || '').split(',')[0].trim();
+  if (ip !== originalIp) {
+    return res.status(403).json({ error: '只有提问者才能追问该问题' });
+  }
+
   if (!q.followUps) q.followUps = [];
   q.followUps.push({
     id: (q.followUps.length + 1),
