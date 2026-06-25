@@ -606,7 +606,7 @@
       </div>
       <div class="settings-row">
         <label>昵称</label>
-        <input type="text" id="settingsName" value="Baichou" onchange="saveSettings()">
+        <input type="text" id="settingsName" value="Baichou">
       </div>
     </div>
 
@@ -614,8 +614,12 @@
       <h3>安全</h3>
       <div class="settings-row">
         <label>密码</label>
-        <input type="password" id="settingsPwd" placeholder="留空则不修改" onchange="saveSettings()">
+        <input type="password" id="settingsPwd" placeholder="留空则不修改">
       </div>
+    </div>
+
+    <div class="settings-section">
+      <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;padding:12px;font-size:15px">💾 保存设置</button>
     </div>
 
     <div class="settings-section">
