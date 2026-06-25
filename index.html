@@ -1078,7 +1078,6 @@
         showToast(res.error || '保存失败');
       }
     }
-    }
 
     async function toggleVisibility(id) {
       const res = await api('/api/admin/questions/' + id + '/toggle-visibility', { method: 'POST' });
