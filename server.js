@@ -16,6 +16,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+// Trust Railway's proxy so req.ip works correctly
+app.set('trust proxy', 1);
+
 // ===== Data Layer =====
 const SEED_FILE = path.join(__dirname, 'db.seed.json');
 
@@ -93,6 +96,8 @@ app.get('/api/questions/public', (req, res) => {
       time: q.time,
       answered: q.answered,
       answer: q.answered ? q.answer : undefined,
+      likesCount: (q.likes || []).length,
+      featured: q.featured || false,
       communityAnswers: (q.communityAnswers || []).slice(-5).reverse(),
       followUps: (q.followUps || []).filter(f => f.answered).map(f => ({
         text: f.text,
@@ -158,6 +163,29 @@ app.post('/api/questions/:id/followup', (req, res) => {
   });
   writeData(data);
   res.json({ success: true });
+});
+
+// Public: Like/unlike a question (IP-based)
+app.post('/api/questions/:id/like', (req, res) => {
+  const data = readData();
+  const id = parseInt(req.params.id);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
+
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (!q.likes) q.likes = [];
+
+  const idx = q.likes.indexOf(ip);
+  if (idx >= 0) {
+    q.likes.splice(idx, 1);
+    writeData(data);
+    return res.json({ success: true, liked: false, likesCount: q.likes.length });
+  } else {
+    q.likes.push(ip);
+    writeData(data);
+    return res.json({ success: true, liked: true, likesCount: q.likes.length });
+  }
 });
 
 // Admin: Answer a follow-up question
@@ -254,6 +282,21 @@ app.delete('/api/admin/questions/:id', (req, res) => {
   data.questions = data.questions.filter(q => q.id !== id);
   writeData(data);
   res.json({ success: true });
+});
+
+// Admin: Toggle featured status
+app.post('/api/admin/questions/:id/toggle-featured', (req, res) => {
+  const token = req.headers['admin-token'];
+  const data = readData();
+  if (token !== data.password) return res.status(401).json({ error: '未授权' });
+
+  const id = parseInt(req.params.id);
+  const q = data.questions.find(q => q.id === id);
+  if (!q) return res.status(404).json({ error: '问题不存在' });
+
+  q.featured = !q.featured;
+  writeData(data);
+  res.json({ success: true, featured: q.featured });
 });
 
 // Admin: Upload a background image
