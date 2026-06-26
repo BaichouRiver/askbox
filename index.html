@@ -169,6 +169,32 @@
       background: var(--primary-light); color: var(--primary-dark);
     }
     .public-q-item .q-tag.answered { background: #ECFDF5; color: #059669; }
+    .public-q-item .q-featured-badge {
+      display: inline-block; font-size: 14px; margin-right: 4px;
+    }
+    .public-q-item .q-like-btn { background:none; border:none; cursor:pointer; padding:2px 4px; font-size:14px; transition:transform 0.15s; }
+    .public-q-item .q-like-btn:active { transform:scale(1.2); }
+    .public-q-item .q-like-btn .count { font-size:12px; color:var(--text-muted); margin-left:2px; }
+    .public-q-item .q-like-btn.liked .count { color:var(--primary); }
+
+    /* ===== Date Filter ===== */
+    .date-filter-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
+    }
+    .date-filter-row input[type="date"] {
+      flex:1; padding:8px 12px; font-size:13px; font-family:var(--font);
+      background:#F5F4F8; color:var(--text);
+      border:1px solid transparent; border-radius:8px; cursor:pointer;
+    }
+    .date-filter-row input[type="date"]:focus { border-color:var(--primary); }
+    .date-filter-row .filter-btn {
+      padding:8px 14px; font-size:12px; font-weight:500;
+      border:none; border-radius:8px; cursor:pointer;
+      background:var(--primary); color:white; white-space:nowrap;
+    }
+    .date-filter-row .filter-btn.clear {
+      background:#F3F4F6; color:var(--text-muted);
+    }
 
     /* ===== Admin Page ===== */
     .admin-login {
@@ -795,20 +821,54 @@
       }
     }
 
+    let dateFilterDate = '';
+
+    function setDateFilter(date) {
+      dateFilterDate = date;
+      renderPublicQuestions();
+    }
+
+    function clearDateFilter() {
+      dateFilterDate = '';
+      document.getElementById('dateFilterInput').value = '';
+      renderPublicQuestions();
+    }
+
     async function renderPublicQuestions() {
       const container = document.getElementById('publicQuestions');
       const res = await api('/api/questions/public');
-      const list = res.questions || [];
+      let list = res.questions || [];
+
+      // Apply date filter
+      if (dateFilterDate) {
+        const filterStart = new Date(dateFilterDate + 'T00:00:00+08:00').getTime();
+        const filterEnd = filterStart + 86400000;
+        list = list.filter(q => q.time >= filterStart && q.time < filterEnd);
+      }
+
       if (list.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">💭</div><p>还没有提问，来做第一个吧！</p></div>';
+        container.innerHTML = `
+          <div class="date-filter-row">
+            <input type="date" id="dateFilterInput" value="${dateFilterDate}" onchange="setDateFilter(this.value)">
+            ${dateFilterDate ? '<button class="filter-btn clear" onclick="clearDateFilter()">✕ 清除</button>' : '<button class="filter-btn" onclick="document.getElementById(\'dateFilterInput\').showPicker()">📅 按日期查看</button>'}
+          </div>
+          <div class="empty-state"><div class="icon">💭</div><p>${dateFilterDate ? '该日期没有公开提问' : '还没有提问，来做第一个吧！'}</p></div>
+        `;
         return;
       }
-      container.innerHTML = list.map(q => {
+      const likedFromStorage = JSON.parse(localStorage.getItem('askbox_liked') || '{}');
+      container.innerHTML = `
+        <div class="date-filter-row">
+          <input type="date" id="dateFilterInput" value="${dateFilterDate}" onchange="setDateFilter(this.value)">
+          ${dateFilterDate ? '<button class="filter-btn clear" onclick="clearDateFilter()">✕ 清除</button>' : ''}
+        </div>
+        ${list.map(q => {
         const timeStr = formatTime(q.time);
         const communityAnswers = q.communityAnswers || [];
+        const isLiked = likedFromStorage['q_' + q.id];
         return `
           <div class="public-q-item">
-            <div class="q-text">${escHtml(q.text)}</div>
+            <div class="q-text">${q.featured ? '<span class="q-featured-badge">⭐</span>' : ''}${escHtml(q.text)}</div>
             <div class="q-meta">
               <span>— ${escHtml(q.name)}</span>
               <span>${q.answered ? '<span class="q-tag answered">已回复</span>' : '<span class="q-tag">待回复</span>'} · ${timeStr}</span>
@@ -843,15 +903,17 @@
                 `).join('')}
               </div>
             ` : ''}
-            <div style="margin-top:8px">
+            <div style="margin-top:8px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <button class="q-like-btn${isLiked ? ' liked' : ''}" onclick="toggleLike(${q.id},this)">${isLiked ? '❤️' : '🤍'} <span class="count">${q.likesCount || 0}</span></button>
               ${q.answered ? `<button onclick="toggleFollowupForm(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 8px 4px 0">🔄 追问</button>` : ''}
-              <button onclick="toggleCommunityForm(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 0">✏️ 我也想说两句</button>
-              <div id="communityForm_${q.id}" style="display:none;margin-top:8px">
+              <button onclick="toggleCommunityForm(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 0">✏️ 回应</button>
+              ${q.answered ? `<button onclick="makePublicCard(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 0;margin-left:4px">🎴 卡片</button>` : ''}
+              <div id="communityForm_${q.id}" style="display:none;margin-top:8px;width:100%">
                 <input type="text" id="commName_${q.id}" placeholder="你的名字（选填）" style="width:100%;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;margin-bottom:6px">
                 <textarea id="commText_${q.id}" placeholder="写下你的回应……" style="width:100%;min-height:50px;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;resize:vertical;margin-bottom:6px"></textarea>
                 <button onclick="submitCommunityAnswer(${q.id})" style="padding:6px 14px;font-size:12px;font-weight:500;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer">发送回应 💬</button>
               </div>
-              <div id="followupForm_${q.id}" style="display:none;margin-top:8px">
+              <div id="followupForm_${q.id}" style="display:none;margin-top:8px;width:100%">
                 <input type="text" id="fuName_${q.id}" placeholder="你的名字（选填）" style="width:100%;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;margin-bottom:6px">
                 <textarea id="fuText_${q.id}" placeholder="写下你的追问……" style="width:100%;min-height:50px;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;resize:vertical;margin-bottom:6px"></textarea>
                 <button onclick="submitFollowup(${q.id})" style="padding:6px 14px;font-size:12px;font-weight:500;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer">发送追问 🔄</button>
@@ -859,7 +921,8 @@
             </div>
           </div>
         `;
-      }).join('');
+      }).join('')}
+      `;
     }
 
     function toggleCommunityForm(id) {
@@ -1028,6 +1091,7 @@
               <textarea id="answerInput_${q.id}" placeholder="写下你的回答……">${q.answer || ''}</textarea>
               <div class="btn-row">
                 <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();saveAnswer(${q.id})">💾 保存回答</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();toggleFeatured(${q.id})">${q.featured ? '🌟 取消精选' : '⭐ 设为精选'}</button>
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();deleteQuestion(${q.id})">🗑️ 删除</button>
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();toggleVisibility(${q.id})">${q.public ? '🔒 设为私密' : '🌐 设为公开'}</button>
                 <button class="btn btn-sm" style="background:var(--primary);color:white" onclick="event.stopPropagation();saveAndMakeCard(${q.id})">🎨 制作卡片</button>
@@ -1088,6 +1152,15 @@
       }
     }
 
+    async function toggleFeatured(id) {
+      const res = await api('/api/admin/questions/' + id + '/toggle-featured', { method: 'POST' });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast(res.featured ? '⭐ 已设为精选' : '🌟 已取消精选');
+      }
+    }
+
     async function deleteQuestion(id) {
       if (!confirm('确定删除这条提问？')) return;
       const res = await api('/api/admin/questions/' + id, { method: 'DELETE' });
@@ -1102,7 +1175,7 @@
       const input = document.getElementById('answerInput_' + id);
       const answer = input.value.trim();
       if (!answer) { showToast('请先写下回答再制作卡片 😅'); return; }
-      const q = state.questions.find(q => q.id === id);
+      const q = findCardQuestion(id);
       if (q) { q.answer = answer; q.answered = true; }
       api('/api/admin/questions/' + id + '/answer', {
         method: 'POST',
@@ -1152,10 +1225,21 @@
     //  PAGE: CARD GENERATOR
     // ============================================================
 
-    function populateCardSelect() {
+    let cardPublicData = []; // cached public answered questions for card page
+
+    async function populateCardSelect() {
       const select = document.getElementById('cardQuestionSelect');
-      const answered = state.questions.filter(q => q.answered && q.answer.trim());
-      const pending = state.questions.filter(q => !q.answered);
+      // If admin has full data, use it; otherwise fetch public answered questions
+      let answered, pending;
+      if (state.questions.length > 0) {
+        answered = state.questions.filter(q => q.answered && q.answer.trim());
+        pending = state.questions.filter(q => !q.answered);
+      } else {
+        const res = await api('/api/questions/public');
+        cardPublicData = (res.questions || []).filter(q => q.answered && q.answer);
+        answered = cardPublicData;
+        pending = [];
+      }
       let html = '<option value="">— 选择一条提问 —</option>';
       if (answered.length) {
         html += '<optgroup label="✅ 已回答">';
@@ -1174,6 +1258,19 @@
         html += '</optgroup>';
       }
       select.innerHTML = html;
+
+      // If navigated from public page with a specific question, pre-select it
+      if (state._cardPublicData) {
+        const data = state._cardPublicData;
+        // Try to find it in the select options
+        setTimeout(() => {
+          if (select.querySelector(`option[value="${data.id}"]`)) {
+            select.value = data.id;
+          }
+          onCardQuestionChange();
+          state._cardPublicData = null;
+        }, 100);
+      }
     }
 
     let currentBg = 'lavender';
@@ -1216,6 +1313,13 @@
       }
     }
 
+    function findCardQuestion(id) {
+      if (state.questions.length > 0) {
+        return state.questions.find(q => q.id === id);
+      }
+      return cardPublicData.find(q => q.id === id);
+    }
+
     function onCardQuestionChange() {
       const select = document.getElementById('cardQuestionSelect');
       const id = parseInt(select.value);
@@ -1224,7 +1328,7 @@
         document.getElementById('cardAText').textContent = '在这里写下你的回答……';
         return;
       }
-      const q = state.questions.find(q => q.id === id);
+      const q = findCardQuestion(id);
       if (q) {
         document.getElementById('cardQText').textContent = q.text;
         if (q.answered && q.answer) {
@@ -1468,11 +1572,35 @@
       const d = new Date(ts);
       const now = new Date();
       const diff = now - d;
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayDiff = Math.floor((today - msgDate) / 86400000);
       if (diff < 60000) return '刚刚';
       if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
       if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-      if (diff < 172800000) return '昨天';
+      if (dayDiff === 1) return '昨天';
       return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    }
+
+    async function toggleLike(id, btn) {
+      const res = await api('/api/questions/' + id + '/like', { method: 'POST' });
+      if (res.success) {
+        const liked = JSON.parse(localStorage.getItem('askbox_liked') || '{}');
+        liked['q_' + id] = res.liked;
+        localStorage.setItem('askbox_liked', JSON.stringify(liked));
+        btn.innerHTML = (res.liked ? '❤️' : '🤍') + ' <span class="count">' + res.likesCount + '</span>';
+        btn.classList.toggle('liked', res.liked);
+      }
+    }
+
+    async function makePublicCard(id) {
+      // Fetch from public API and find the question, then navigate to card
+      const res = await api('/api/questions/public');
+      const q = (res.questions || []).find(q => q.id === id);
+      if (q && q.answered && q.answer) {
+        state._cardPublicData = { id: q.id, text: q.text, answer: q.answer };
+      }
+      navigate('card');
     }
 
     function applySettings() {
