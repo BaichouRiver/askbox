@@ -1,368 +1,1710 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'db.json');
-const DATA_DIR = path.join(__dirname, 'data');
-
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-
-// ===== Middleware =====
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(UPLOAD_DIR));
-
-// Trust Railway's proxy so req.ip works correctly
-app.set('trust proxy', 1);
-
-// ===== Data Layer =====
-const SEED_FILE = path.join(__dirname, 'db.seed.json');
-
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) {
-    // Try seed file first (for Railway Volume first-deploy scenario)
-    if (fs.existsSync(SEED_FILE)) {
-      fs.copyFileSync(SEED_FILE, DATA_FILE);
-      console.log('📄 Copied seed data to data/db.json');
-    } else {
-      fs.writeFileSync(DATA_FILE, JSON.stringify({
-        questions: [],
-        nextId: 1,
-        name: 'Baichou',
-        password: 'admin123',
-        cardBg: 'lavender',
-        cardCustomColor: '#F5E8FF',
-      }, null, 2));
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Baichou · 提问箱</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #7C5CFC;
+      --primary-light: #EEEBFF;
+      --primary-dark: #5B3FCF;
+      --primary-glow: #9B7FFF;
+      --bg: #F8F7FA;
+      --card-bg: #FFFFFF;
+      --card-shadow: 0 2px 16px rgba(0,0,0,0.06);
+      --text: #1F1F2D;
+      --text-light: #6B7280;
+      --text-muted: #9CA3AF;
+      --border: #E8E6ED;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      --nav-height: 64px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --gradient-1: linear-gradient(135deg, #F5E8FF 0%, #E8F0FF 100%);
+      --gradient-2: linear-gradient(135deg, #FFF0E8 0%, #FFE8F0 100%);
+      --gradient-3: linear-gradient(135deg, #E8FFEE 0%, #E8F5FF 100%);
+      --gradient-4: linear-gradient(135deg, #F0E8FF 0%, #FFE8F5 100%);
+      --gradient-midnight: linear-gradient(135deg, #E8EFFF 0%, #F5E8FF 100%);
     }
-  }
-}
-
-function readData() {
-  ensureDataFile();
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-  } catch {
-    return { questions: [], nextId: 1, name: 'Baichou', password: 'admin123', cardBg: 'lavender', cardCustomColor: '#F5E8FF' };
-  }
-}
-
-function writeData(data) {
-  ensureDataFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-// ===== API Routes =====
-
-// Public: Submit a question
-app.post('/api/questions', (req, res) => {
-  const { text, name, isPublic } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ error: '请输入问题内容' });
-
-  const data = readData();
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-  const question = {
-    id: data.nextId++,
-    text: text.trim(),
-    name: (name || '').trim() || '匿名',
-    time: Date.now(),
-    answer: '',
-    answered: false,
-    public: isPublic === true,
-    ip: ip.split(',')[0].trim(),
-    communityAnswers: [],
-    followUps: [],
-  };
-  data.questions.unshift(question);
-  writeData(data);
-  res.json({ success: true, question });
-});
-
-// Public: Get ONLY public questions
-app.get('/api/questions/public', (req, res) => {
-  const data = readData();
-  const list = data.questions
-    .filter(q => q.public)
-    .slice(0, 50)
-    .map(q => ({
-      id: q.id,
-      text: q.text,
-      name: q.name,
-      time: q.time,
-      answered: q.answered,
-      answer: q.answered ? q.answer : undefined,
-      likesCount: (q.likes || []).length,
-      featured: q.featured || false,
-      communityAnswers: (q.communityAnswers || []).slice(-5).reverse(),
-      followUps: (q.followUps || []).filter(f => f.answered).map(f => ({
-        text: f.text,
-        name: f.name,
-        time: f.time,
-        answer: f.answer,
-      })),
-    }));
-  res.json({ questions: list });
-});
-
-// Public: Add a community answer to a public question
-app.post('/api/questions/:id/community-answer', (req, res) => {
-  const { text, name } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ error: '请输入内容' });
-
-  const data = readData();
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
-
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-  if (!q.communityAnswers) q.communityAnswers = [];
-  q.communityAnswers.push({
-    text: text.trim(),
-    name: (name || '').trim() || '匿名',
-    time: Date.now(),
-    ip: ip.split(',')[0].trim(),
-  });
-  writeData(data);
-  res.json({ success: true });
-});
-
-// Public: Add a follow-up question to an answered question
-app.post('/api/questions/:id/followup', (req, res) => {
-  const { text, name } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ error: '请输入追问内容' });
-
-  const data = readData();
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
-  if (!q.answered) return res.status(400).json({ error: '该问题还未回答，暂时不能追问' });
-
-  // Only the original asker can follow up (using IP verification)
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  const originalIp = (q.ip || '').split(',')[0].trim();
-  if (ip !== originalIp) {
-    return res.status(403).json({ error: '只有提问者才能追问该问题' });
-  }
-
-  if (!q.followUps) q.followUps = [];
-  q.followUps.push({
-    id: (q.followUps.length + 1),
-    text: text.trim(),
-    name: (name || '').trim() || '匿名',
-    time: Date.now(),
-    answer: '',
-    answered: false,
-    ip: ip.split(',')[0].trim(),
-  });
-  writeData(data);
-  res.json({ success: true });
-});
-
-// Public: Like/unlike a question (IP-based)
-app.post('/api/questions/:id/like', (req, res) => {
-  const data = readData();
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-  if (!q.public) return res.status(403).json({ error: '该问题未公开' });
-
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  if (!q.likes) q.likes = [];
-
-  const idx = q.likes.indexOf(ip);
-  if (idx >= 0) {
-    q.likes.splice(idx, 1);
-    writeData(data);
-    return res.json({ success: true, liked: false, likesCount: q.likes.length });
-  } else {
-    q.likes.push(ip);
-    writeData(data);
-    return res.json({ success: true, liked: true, likesCount: q.likes.length });
-  }
-});
-
-// Admin: Answer a follow-up question
-app.post('/api/admin/questions/:id/followup/:fid/answer', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const id = parseInt(req.params.id);
-  const fid = parseInt(req.params.fid);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-
-  const fu = (q.followUps || []).find(f => f.id === fid);
-  if (!fu) return res.status(404).json({ error: '追问不存在' });
-
-  const { answer } = req.body;
-  if (!answer || !answer.trim()) return res.status(400).json({ error: '请输入回答' });
-
-  fu.answer = answer.trim();
-  fu.answered = true;
-  writeData(data);
-  res.json({ success: true });
-});
-
-// Admin: Get all questions (requires admin token)
-app.get('/api/admin/questions', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '密码错误' });
-
-  res.json({
-    questions: data.questions,
-    name: data.name,
-    cardBg: data.cardBg,
-    cardCustomColor: data.cardCustomColor,
-    bgImage: data.bgImage || null,
-    cardBgImage: data.cardBgImage || null,
-  });
-});
-
-// Admin: Login
-app.post('/api/admin/login', (req, res) => {
-  const { password } = req.body;
-  const data = readData();
-  if (password === data.password) {
-    res.json({ success: true, name: data.name });
-  } else {
-    res.status(401).json({ error: '密码错误' });
-  }
-});
-
-// Admin: Answer a question
-app.post('/api/admin/questions/:id/answer', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-
-  const { answer } = req.body;
-  if (!answer || !answer.trim()) return res.status(400).json({ error: '请输入回答' });
-
-  q.answer = answer.trim();
-  q.answered = true;
-  writeData(data);
-  res.json({ success: true, question: q });
-});
-
-// Admin: Toggle question visibility
-app.post('/api/admin/questions/:id/toggle-visibility', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-
-  q.public = !q.public;
-  writeData(data);
-  res.json({ success: true, public: q.public });
-});
-
-// Admin: Delete a question
-app.delete('/api/admin/questions/:id', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const id = parseInt(req.params.id);
-  data.questions = data.questions.filter(q => q.id !== id);
-  writeData(data);
-  res.json({ success: true });
-});
-
-// Admin: Toggle featured status
-app.post('/api/admin/questions/:id/toggle-featured', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const id = parseInt(req.params.id);
-  const q = data.questions.find(q => q.id === id);
-  if (!q) return res.status(404).json({ error: '问题不存在' });
-
-  q.featured = !q.featured;
-  writeData(data);
-  res.json({ success: true, featured: q.featured });
-});
-
-// Admin: Upload a background image
-app.post('/api/admin/upload', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const { image, type } = req.body;
-  if (!image || !type) return res.status(400).json({ error: '缺少图片数据' });
-
-  // Validate image type
-  const matches = image.match(/^data:image\/(jpeg|png|gif|webp);base64,(.+)$/i);
-  if (!matches) return res.status(400).json({ error: '图片格式不支持，请使用 jpg/png/gif/webp' });
-
-  const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-  const base64Data = matches[2];
-  const filename = 'bg_' + type + '_' + Date.now() + '.' + ext;
-  const filepath = path.join(UPLOAD_DIR, filename);
-
-  fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
-
-  const url = '/uploads/' + filename;
-  const key = type + 'Image';
-  data[key] = url;
-  writeData(data);
-
-  res.json({ success: true, url });
-});
-
-// Admin: Update settings
-app.put('/api/admin/settings', (req, res) => {
-  const token = req.headers['admin-token'];
-  const data = readData();
-  if (token !== data.password) return res.status(401).json({ error: '未授权' });
-
-  const { name, password, oldPassword, cardBg, cardCustomColor } = req.body;
-
-  // If changing password, require old password verification
-  if (password && password !== data.password) {
-    if (!oldPassword || oldPassword !== data.password) {
-      return res.status(403).json({ error: '旧密码错误，修改密码失败' });
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
+      -webkit-font-smoothing: antialiased;
     }
-    data.password = password;
-  }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% -10%, rgba(124,92,252,0.03) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    input, textarea, button { font-family: var(--font); outline: none; border: none; }
+    ::selection { background: var(--primary-light); color: var(--primary-dark); }
+    ::placeholder { color: var(--text-muted); opacity: 1; }
+    input, textarea, select { color: var(--text); }
 
-  if (name) data.name = name;
-  if (cardBg) data.cardBg = cardBg;
-  if (cardCustomColor) data.cardCustomColor = cardCustomColor;
-  writeData(data);
-  res.json({ success: true, bgImage: data.bgImage || null, cardBgImage: data.cardBgImage || null });
-});
+    /* ===== Page Container ===== */
+    .page { display: none; max-width: 480px; margin: 0 auto; padding: 0 16px; }
+    .page.active { display: block; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-// Admin: Get settings (public-safe data)
-app.get('/api/settings', (req, res) => {
-  const data = readData();
-  res.json({ name: data.name, cardBg: data.cardBg, cardCustomColor: data.cardCustomColor, bgImage: data.bgImage || null, cardBgImage: data.cardBgImage || null });
-});
+    /* ===== Bottom Nav ===== */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: calc(var(--nav-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-around;
+      z-index: 1000;
+    }
+    .nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font-size: 11px; color: var(--text-muted); cursor: pointer;
+      transition: color 0.2s; padding: 4px 12px; user-select: none;
+    }
+    .nav-item .nav-icon { font-size: 22px; line-height: 1; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item:active { opacity: 0.6; }
 
-// ===== Start Server =====
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`========================================`);
-  console.log(`  📦 提问箱已启动`);
-  console.log(`  🌐 本地访问: http://localhost:${PORT}`);
-  console.log(`  🌍 局域网访问: http://你的IP:${PORT}`);
-  console.log(`  🔐 管理后台密码: admin123`);
-  console.log(`  💡 按 Ctrl+C 停止`);
-  console.log(`========================================`);
-});
+    /* ===== Header ===== */
+    .page-header {
+      text-align: center; padding: 32px 0 24px;
+    }
+    .page-header .avatar {
+      width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+      border: 3px solid white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      margin-bottom: 12px;
+    }
+    .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .page-header p { font-size: 14px; color: var(--text-light); }
+
+    /* ===== Ask Page ===== */
+    .ask-section { margin-bottom: 24px; }
+    .ask-card {
+      background: var(--card-bg); border-radius: var(--radius);
+      box-shadow: var(--card-shadow); padding: 24px;
+      border: 1px solid var(--border);
+    }
+    .ask-card label {
+      display: block; font-size: 13px; font-weight: 500; color: var(--text-light);
+      margin-bottom: 8px;
+    }
+    .ask-card textarea {
+      width: 100%; min-height: 120px; padding: 14px 16px;
+      font-size: 15px; line-height: 1.6; color: var(--text);
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      resize: vertical; transition: all 0.2s;
+    }
+    .ask-card textarea:focus { background: #F0EEF5; border-color: var(--primary); }
+    .ask-card textarea::placeholder { color: var(--text-muted); }
+    .ask-card input[type="text"] {
+      width: 100%; padding: 12px 16px; font-size: 14px;
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      margin-top: 12px; transition: all 0.2s;
+    }
+    .ask-card input[type="text"]:focus { background: #F0EEF5; border-color: var(--primary); }
+    .ask-card input[type="text"]::placeholder { color: var(--text-muted); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
+      background: var(--primary); color: white; border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.2s; margin-top: 14px;
+      border: none;
+    }
+    .btn:hover { opacity: 0.9; box-shadow: 0 4px 16px rgba(124,92,252,0.2); }
+    .btn:active { transform: scale(0.98); opacity: 0.8; }
+    .btn-secondary {
+      background: var(--primary-light); color: var(--primary-dark);
+    }
+    .btn-secondary:hover { box-shadow: 0 4px 12px rgba(124,92,252,0.1); }
+    .btn-outline {
+      background: transparent; border: 1.5px solid var(--border); color: var(--text-light);
+    }
+    .btn-outline:hover { border-color: var(--text-muted); color: var(--text); }
+    .btn-outline:active { background: #F3F1F8; }
+    .btn-sm {
+      padding: 8px 16px; font-size: 13px; width: auto; border-radius: 8px;
+    }
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #1F1F2D; color: white; padding: 10px 24px;
+      border-radius: 12px; font-size: 14px; font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      opacity: 0; transition: opacity 0.3s, transform 0.3s;
+      z-index: 9999; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ===== Recent Questions (Public) ===== */
+    .recent-title { font-size: 14px; font-weight: 600; color: var(--text-light); margin-bottom: 12px; }
+    .public-q-item {
+      background: var(--card-bg); border-radius: var(--radius-sm);
+      padding: 14px 16px; margin-bottom: 10px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 8px rgba(0,0,0,0.15);
+    }
+    .public-q-item .q-text { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
+    .public-q-item .q-meta { font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .public-q-item .q-tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 6px;
+      background: var(--primary-light); color: var(--primary-dark);
+    }
+    .public-q-item .q-tag.answered { background: #ECFDF5; color: #059669; }
+    .public-q-item .q-featured-badge {
+      display: inline-block; font-size: 14px; margin-right: 4px;
+    }
+    .public-q-item .q-like-btn { background:none; border:none; cursor:pointer; padding:2px 4px; font-size:14px; transition:transform 0.15s; }
+    .public-q-item .q-like-btn:active { transform:scale(1.2); }
+    .public-q-item .q-like-btn .count { font-size:12px; color:var(--text-muted); margin-left:2px; }
+    .public-q-item .q-like-btn.liked .count { color:var(--primary); }
+
+    /* ===== Date Filter ===== */
+    .date-filter-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
+    }
+    .date-filter-row input[type="date"] {
+      flex:1; padding:8px 12px; font-size:13px; font-family:var(--font);
+      background:#F5F4F8; color:var(--text);
+      border:1px solid transparent; border-radius:8px; cursor:pointer;
+    }
+    .date-filter-row input[type="date"]:focus { border-color:var(--primary); }
+    .date-filter-row .filter-btn {
+      padding:8px 14px; font-size:12px; font-weight:500;
+      border:none; border-radius:8px; cursor:pointer;
+      background:var(--primary); color:white; white-space:nowrap;
+    }
+    .date-filter-row .filter-btn.clear {
+      background:#F3F4F6; color:var(--text-muted);
+    }
+
+    /* ===== Admin Page ===== */
+    .admin-login {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 70vh; text-align: center; padding: 40px 20px;
+    }
+    .admin-login .lock-icon { font-size: 48px; margin-bottom: 16px; }
+    .admin-login h2 { font-size: 20px; margin-bottom: 8px; }
+    .admin-login p { font-size: 14px; color: var(--text-light); margin-bottom: 24px; }
+    .admin-login input {
+      width: 100%; max-width: 280px; padding: 14px 16px; font-size: 16px;
+      text-align: center; background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm); color: var(--text);
+      margin-bottom: 12px; letter-spacing: 4px;
+    }
+    .admin-login input:focus { border-color: var(--primary); background: #F0EEF5; }
+    .admin-login .btn { max-width: 280px; }
+
+    .admin-dashboard { display: none; }
+    .admin-dashboard.active { display: block; }
+    .stats-row {
+      display: flex; gap: 10px; margin-bottom: 20px;
+    }
+    .stat-card {
+      flex: 1; background: var(--card-bg); border-radius: var(--radius-sm);
+      padding: 14px; text-align: center;
+      border: 1px solid var(--border);
+      box-shadow: var(--card-shadow);
+    }
+    .stat-card .num { font-size: 26px; font-weight: 700; color: var(--primary); }
+    .stat-card .label { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+    .admin-tabs {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .admin-tab {
+      flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 500;
+      border-radius: 8px; cursor: pointer; background: #F0EEF5; color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .admin-tab.active { background: var(--primary); color: white; }
+
+    .q-list { }
+    .q-item {
+      background: var(--card-bg); border-radius: var(--radius);
+      padding: 16px 18px; margin-bottom: 10px;
+      border: 1px solid var(--border);
+      box-shadow: var(--card-shadow);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .q-item .q-clickable { cursor: pointer; }
+    .q-item .q-no-click { cursor: default; }
+    .q-item:active { transform: scale(0.99); }
+    .q-item .q-header {
+      display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;
+    }
+    .q-item .q-status {
+      font-size: 11px; padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+    }
+    .q-item .q-status.pending { background: #FEF3C7; color: #D97706; }
+    .q-item .q-status.answered { background: #ECFDF5; color: #059669; }
+    .q-item .q-text { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+    .q-item .q-name { font-size: 12px; color: var(--text-muted); }
+    .q-item .q-time { font-size: 12px; color: var(--text-muted); }
+    .q-item .q-actions {
+      display: none; margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .q-item.expanded .q-actions { display: block; }
+    .q-item .q-actions textarea {
+      width: 100%; min-height: 80px; padding: 12px; font-size: 14px; line-height: 1.6;
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm); resize: vertical; color: var(--text);
+      margin-bottom: 10px;
+    }
+    .q-item .q-actions textarea:focus { border-color: var(--primary); background: #F0EEF5; }
+    .q-item .q-actions .btn-row {
+      display: flex; gap: 8px;
+    }
+    .q-item .q-actions .btn-row .btn { margin-top: 0; flex: 1; }
+    .q-item .q-answer {
+      display: none; margin-top: 10px; padding: 12px;
+      background: var(--primary-light); border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-size: 14px; line-height: 1.6; color: var(--text);
+    }
+    .q-item.answered .q-answer { display: block; }
+    .q-item .q-answer-label { font-size: 11px; color: var(--primary-dark); font-weight: 500; margin-bottom: 4px; }
+
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ===== Card Generator ===== */
+    .card-controls { margin-bottom: 20px; }
+    .card-controls select, .card-controls input[type="color"] {
+      width: 100%; padding: 10px 14px; font-size: 14px; font-family: var(--font);
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm); margin-bottom: 10px; color: var(--text);
+      cursor: pointer;
+    }
+    .card-controls select:focus { border-color: var(--primary); }
+    .card-controls .color-row {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .card-controls .color-row input[type="color"] {
+      width: 48px; height: 48px; padding: 3px; border-radius: 10px; flex: none;
+    }
+    .card-controls .color-row input[type="text"] {
+      flex: 1; padding: 10px 14px; font-size: 13px; font-family: var(--font);
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm); color: var(--text);
+    }
+    .bg-options {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .bg-opt {
+      width: 40px; height: 40px; border-radius: 10px; cursor: pointer;
+      border: 2.5px solid transparent; transition: border-color 0.2s;
+    }
+    .bg-opt.active { border-color: var(--primary); }
+    .bg-opt.lavender { background: var(--gradient-1); }
+    .bg-opt.warm { background: var(--gradient-2); }
+    .bg-opt.mint { background: var(--gradient-3); }
+    .bg-opt.pink { background: var(--gradient-4); }
+    .bg-opt.ice { background: var(--gradient-midnight); }
+
+    /* ===== Answer Card Preview ===== */
+    .card-preview-wrapper {
+      margin: 0 auto; max-width: 380px;
+    }
+    .answer-card {
+      width: 100%; aspect-ratio: 9 / 16; border-radius: 20px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+      font-family: var(--font);
+      transition: background 0.3s;
+      padding: 32px 28px;
+      background: var(--gradient-1);
+      color: #1F1F2D;
+    }
+    .answer-card .card-top {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+    }
+    .answer-card .card-avatar {
+      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+      border: 2px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .answer-card .card-name {
+      font-size: 15px; font-weight: 600;
+    }
+    .answer-card .card-subtitle {
+      font-size: 11px; color: var(--text-light); margin-top: 1px;
+    }
+    .answer-card .card-decoration {
+      position: absolute; top: 16px; right: 20px; opacity: 0.06;
+      font-size: 64px; line-height: 1;
+      color: var(--primary);
+    }
+    .answer-card .card-body {
+      flex: 1; display: flex; flex-direction: column; justify-content: center;
+      gap: 16px;
+    }
+    .answer-card .card-q {
+      padding: 16px 18px; background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(0,0,0,0.04);
+      border-radius: 14px; backdrop-filter: blur(8px);
+    }
+    .answer-card .card-q-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 6px; opacity: 0.6;
+    }
+    .answer-card .card-q-text {
+      font-size: 15px; line-height: 1.7; font-weight: 500;
+    }
+    .answer-card .card-a {
+      padding: 16px 18px; background: rgba(124,92,252,0.08);
+      border: 1px solid rgba(124,92,252,0.12);
+      border-radius: 14px; backdrop-filter: blur(8px);
+    }
+    .answer-card .card-a-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 6px; color: var(--primary-dark);
+    }
+    .answer-card .card-a-text {
+      font-size: 14px; line-height: 1.8;
+    }
+    .answer-card .card-watermark {
+      text-align: center; font-size: 11px; color: var(--text-muted);
+      margin-top: 12px;
+    }
+
+    .card-actions {
+      display: flex; gap: 10px; margin-top: 16px;
+    }
+    .card-actions .btn { margin-top: 0; }
+
+    /* ===== Settings Page ===== */
+    .settings-section { margin-bottom: 24px; }
+    .settings-section h3 {
+      font-size: 14px; font-weight: 600; color: var(--text-light); margin-bottom: 12px;
+    }
+    .settings-row {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--card-bg); border-radius: var(--radius);
+      padding: 16px 18px; border: 1px solid var(--border);
+      box-shadow: var(--card-shadow); margin-bottom: 8px;
+    }
+    .settings-row label { font-size: 14px; font-weight: 500; min-width: 70px; }
+    .settings-row input {
+      flex: 1; padding: 8px 12px; font-size: 14px; color: var(--text);
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: 8px;
+    }
+    .settings-row input:focus { border-color: var(--primary); background: #F0EEF5; }
+    .settings-row .avatar-upload {
+      width: 60px; height: 60px; border-radius: 50%; overflow: hidden;
+      cursor: pointer; position: relative; flex: none;
+    }
+    .settings-row .avatar-upload img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .settings-row .avatar-upload .overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: white; opacity: 0; transition: opacity 0.2s;
+    }
+    .settings-row .avatar-upload:hover .overlay { opacity: 1; }
+    .settings-row .avatar-upload input { display: none; }
+
+    /* ===== Empty Pick ===== */
+    .q-select-row {
+      margin-bottom: 16px;
+    }
+    .q-select-row select {
+      width: 100%; padding: 12px 14px; font-size: 14px; font-family: var(--font); color: var(--text);
+      background: #F5F4F8; border: 1px solid transparent;
+      border-radius: var(--radius-sm); cursor: pointer;
+    }
+    .q-select-row select:focus { border-color: var(--primary); }
+    .q-select-row select optgroup { background: #F0EEF5; color: var(--text-light); }
+    .q-select-row select option { background: white; color: var(--text); }
+
+    /* ===== QR Modal ===== */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 2000; backdrop-filter: blur(8px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 20px; padding: 32px 28px;
+      max-width: 360px; width: 100%; text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    }
+    .modal h3 { font-size: 18px; margin-bottom: 8px; }
+    .modal p { font-size: 14px; color: var(--text-light); margin-bottom: 20px; }
+    .modal .qrcode-container {
+      display: flex; justify-content: center; margin-bottom: 20px;
+    }
+    .modal .qrcode-container img { display: block; }
+    .modal .share-url {
+      font-size: 12px; color: var(--text-light); word-break: break-all;
+      background: #F5F4F8; padding: 10px; border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .modal .btn { margin-top: 0; }
+
+    /* ===== Responsive ===== */
+    @media (min-width: 520px) {
+      body { padding: 20px 0 calc(var(--nav-height) + var(--safe-bottom) + 12px); }
+      .bottom-nav { max-width: 520px; left: 50%; transform: translateX(-50%); border-radius: 20px 20px 0 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== Toast ===== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== QR Modal ===== -->
+  <div class="modal-overlay" id="qrModal">
+    <div class="modal">
+      <h3>📱 扫码提问</h3>
+      <p>分享这个二维码，让朋友扫码向你提问</p>
+      <div class="qrcode-container" id="qrcodeContainer"></div>
+      <div class="share-url" id="shareUrl">正在生成链接...</div>
+      <button class="btn btn-sm" onclick="copyShareUrl()" style="margin-bottom:8px">📋 复制链接</button>
+      <button class="btn btn-sm btn-outline" onclick="closeQrModal()">关闭</button>
+    </div>
+  </div>
+
+  <!-- ===== PAGE: Ask ===== -->
+  <div class="page active" id="page-ask">
+    <div class="page-header" id="askPageHeader">
+      <img class="avatar" id="askAvatar" src="avatar.jpg" alt="avatar" onclick="adminReveal()">
+      <h1>Baichou的提问箱</h1>
+      <p>匿名提问 · 随心回答</p>
+    </div>
+
+    <div class="ask-section">
+      <div class="ask-card">
+        <label>✏️ 你有什么想问我的？</label>
+        <textarea id="askInput" placeholder="在这里写下你的问题……(支持匿名)"></textarea>
+        <input type="text" id="askName" placeholder="你的名字（选填，匿名即显示「匿名」）">
+        <label class="public-check" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text-light);cursor:pointer">
+          <input type="checkbox" id="askPublic" checked style="width:16px;height:16px;cursor:pointer">
+          公开这条提问（其他人可见）
+        </label>
+        <button class="btn" onclick="submitQuestion()">✨ 发送提问</button>
+      </div>
+    </div>
+
+    <div class="recent-title">📌 公开提问</div>
+    <div id="publicQuestions"></div>
+  </div>
+
+  <!-- ===== PAGE: Admin ===== -->
+  <div class="page" id="page-admin">
+    <!-- Login -->
+    <div class="admin-login" id="adminLogin">
+      <div class="lock-icon">🔒</div>
+      <h2>管理后台</h2>
+      <p>请输入密码进入管理面板</p>
+      <input type="password" id="adminPwd" placeholder="输入密码" onkeydown="if(event.key==='Enter')adminLogin()">
+      <button class="btn" onclick="adminLogin()">进入后台</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="admin-dashboard" id="adminDashboard">
+      <div class="page-header" style="padding-bottom:16px">
+        <h1 style="font-size:20px">📊 管理后台</h1>
+        <p style="font-size:13px" id="adminSubtitle">管理你的提问箱</p>
+      </div>
+
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card"><div class="num" id="statTotal">0</div><div class="label">全部</div></div>
+        <div class="stat-card"><div class="num" id="statPending">0</div><div class="label">待回答</div></div>
+        <div class="stat-card"><div class="num" id="statAnswered">0</div><div class="label">已回答</div></div>
+      </div>
+
+      <div class="admin-tabs">
+        <div class="admin-tab active" data-filter="all" onclick="filterQuestions('all',this)">全部</div>
+        <div class="admin-tab" data-filter="pending" onclick="filterQuestions('pending',this)">待回答</div>
+        <div class="admin-tab" data-filter="answered" onclick="filterQuestions('answered',this)">已回答</div>
+      </div>
+
+      <div id="adminQuestionList"></div>
+
+      <div style="margin-top:20px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary" onclick="generateTestQuestion()">🔄 生成测试提问</button>
+        <button class="btn btn-sm btn-outline" onclick="adminLogout()">🚪 退出</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PAGE: Card Generator ===== -->
+  <div class="page" id="page-card">
+    <div class="page-header" style="padding-bottom:16px">
+      <h1 style="font-size:20px">🎨 卡片工坊</h1>
+      <p style="font-size:13px">生成 Q&A 卡片，截图发抖音</p>
+    </div>
+
+    <div class="q-select-row">
+      <select id="cardQuestionSelect" onchange="onCardQuestionChange()">
+        <option value="">— 请先选择要制作的提问 —</option>
+      </select>
+    </div>
+
+    <div class="card-controls">
+      <div class="bg-options" id="bgOptions">
+        <div class="bg-opt lavender active" data-bg="lavender" onclick="selectBg('lavender',this)" title="薰衣草"></div>
+        <div class="bg-opt warm" data-bg="warm" onclick="selectBg('warm',this)" title="暖阳"></div>
+        <div class="bg-opt mint" data-bg="mint" onclick="selectBg('mint',this)" title="薄荷"></div>
+        <div class="bg-opt pink" data-bg="pink" onclick="selectBg('pink',this)" title="粉彩"></div>
+        <div class="bg-opt ice" data-bg="ice" onclick="selectBg('ice',this)" title="冰蓝"></div>
+        <button class="bg-opt" id="cardImgBgBtn" onclick="selectBg('image',this)" title="自定义图片" style="background:linear-gradient(135deg,#E8E8E8,#F5F5F5);display:flex;align-items:center;justify-content:center;font-size:16px">🖼</button>
+      </div>
+      <div class="color-row">
+        <input type="color" id="customColor" value="#F5E8FF" onchange="setCustomBg(this.value)">
+        <input type="text" id="customColorText" placeholder="或输入颜色值 #..." onchange="setCustomBg(this.value)">
+      </div>
+    </div>
+
+    <div class="card-preview-wrapper">
+      <div class="answer-card" id="answerCard">
+        <div class="card-decoration">✦</div>
+        <div class="card-top">
+          <img class="card-avatar" id="cardAvatar" src="avatar.jpg" alt="">
+          <div>
+            <div class="card-name" id="cardName">Baichou</div>
+            <div class="card-subtitle">匿名提问箱</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-q">
+            <div class="card-q-label">✧ 提问</div>
+            <div class="card-q-text" id="cardQText">选择左侧提问即可预览</div>
+          </div>
+          <div class="card-a">
+            <div class="card-a-label">✦ 回答</div>
+            <div class="card-a-text" id="cardAText">在这里写下你的回答……</div>
+          </div>
+        </div>
+        <div class="card-watermark" id="cardWatermark">Baichou · 匿名提问箱</div>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <button class="btn btn-sm btn-secondary" onclick="downloadCard()">💾 下载卡片</button>
+      <button class="btn btn-sm btn-outline" onclick="showQrModal()">📱 分享提问箱</button>
+    </div>
+  </div>
+
+  <!-- ===== PAGE: Settings ===== -->
+  <div class="page" id="page-settings">
+    <div class="page-header" style="padding-bottom:16px">
+      <h1 style="font-size:20px">⚙️ 设置</h1>
+      <p style="font-size:13px">自定义你的提问箱</p>
+    </div>
+
+    <div class="settings-section">
+      <h3>个人资料</h3>
+      <div class="settings-row">
+        <label>头像</label>
+        <div class="avatar-upload" onclick="document.getElementById('avatarInput').click()">
+          <img id="settingsAvatar" src="avatar.jpg" alt="">
+          <div class="overlay">📷</div>
+          <input type="file" id="avatarInput" accept="image/*" onchange="changeAvatar(event)">
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>昵称</label>
+        <input type="text" id="settingsName" value="Baichou">
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>安全</h3>
+      <div class="settings-row">
+        <label>密码</label>
+        <input type="password" id="settingsPwd" placeholder="留空则不修改">
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;padding:12px;font-size:15px">💾 保存设置</button>
+    </div>
+
+    <div class="settings-section">
+      <h3>自定义背景</h3>
+      <div class="settings-row">
+        <label>提问箱背景</label>
+        <div style="flex:1">
+          <div id="bgPreview" style="width:100%;height:80px;border-radius:10px;background:var(--gradient-1);background-size:cover;background-position:center;margin-bottom:6px;border:1px solid var(--border)"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('bgUploadInput').click()" style="flex:1">🖼️ 上传图片</button>
+            <button class="btn btn-sm btn-outline" id="bgRemoveBtn" onclick="removeBgImage()" style="display:none">✕ 移除</button>
+          </div>
+          <input type="file" id="bgUploadInput" accept="image/*" style="display:none" onchange="uploadBgImage('bg', this)">
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>卡片背景</label>
+        <div style="flex:1">
+          <div id="cardBgPreview" style="width:100%;height:80px;border-radius:10px;background:var(--gradient-1);background-size:cover;background-position:center;margin-bottom:6px;border:1px solid var(--border)"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cardBgUploadInput').click()" style="flex:1">🖼️ 上传图片</button>
+            <button class="btn btn-sm btn-outline" id="cardBgRemoveBtn" onclick="removeCardBgImage()" style="display:none">✕ 移除</button>
+          </div>
+          <input type="file" id="cardBgUploadInput" accept="image/*" style="display:none" onchange="uploadBgImage('cardBg', this)">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>数据</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary" onclick="exportData()">📦 导出数据</button>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('importFile').click()">📥 导入数据</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="btn btn-sm btn-outline" onclick="if(confirm('确定要清空所有数据？'))clearAllData()">🗑️ 清空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Bottom Nav ===== -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" data-page="ask" onclick="navigate('ask')">
+      <span class="nav-icon">✉️</span>
+      <span>提问</span>
+    </div>
+    <div class="nav-item" data-page="card" onclick="navigate('card')">
+      <span class="nav-icon">🎨</span>
+      <span>卡片</span>
+    </div>
+    <div class="nav-item admin-only" data-page="admin" onclick="navigate('admin')" style="display:none">
+      <span class="nav-icon">📋</span>
+      <span>管理</span>
+    </div>
+    <div class="nav-item admin-only" data-page="settings" onclick="navigate('settings')" style="display:none">
+      <span class="nav-icon">⚙️</span>
+      <span>设置</span>
+    </div>
+  </nav>
+
+  <script>
+    // ============================================================
+    //  API LAYER
+    // ============================================================
+
+    const API_BASE = '';
+
+    let state = {
+      questions: [],
+      name: 'Baichou',
+      password: 'admin123',
+      cardBg: 'lavender',
+      cardCustomColor: '#F5E8FF',
+      bgImage: null,
+      cardBgImage: null,
+    };
+
+    let adminToken = sessionStorage.getItem('askbox_admin_token') || '';
+    let adminRevealCount = 0;
+
+    function adminReveal() {
+      adminRevealCount++;
+      if (adminRevealCount >= 5) {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+        document.getElementById('askPageHeader').querySelector('p').textContent = '👤 管理入口已解锁';
+        adminRevealCount = 0;
+        setTimeout(() => {
+          document.getElementById('askPageHeader').querySelector('p').textContent = '匿名提问 · 随心回答';
+        }, 3000);
+      }
+    }
+
+    function showAdminNav() {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+    }
+
+    function hideAdminNav() {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...options.headers };
+      if (adminToken) headers['admin-token'] = adminToken;
+      try {
+        const r = await fetch(API_BASE + path, { ...options, headers });
+        return await r.json();
+      } catch (e) {
+        return { error: '网络错误' };
+      }
+    }
+
+    async function initApp() {
+      const settings = await api('/api/settings');
+      if (settings.name) {
+        state.name = settings.name;
+        state.cardBg = settings.cardBg || 'lavender';
+        state.cardCustomColor = settings.cardCustomColor || '#F5E8FF';
+        state.bgImage = settings.bgImage || null;
+        state.cardBgImage = settings.cardBgImage || null;
+        applySettings();
+      }
+      renderPublicQuestions();
+      populateCardSelect();
+    }
+
+    // ============================================================
+    //  NAVIGATION
+    // ============================================================
+
+    function navigate(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelector('.nav-item[data-page="' + page + '"]').classList.add('active');
+      if (page === 'ask') renderPublicQuestions();
+      if (page === 'admin') renderAdminList();
+      if (page === 'card') populateCardSelect();
+    }
+
+    // ============================================================
+    //  TOAST
+    // ============================================================
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2000);
+    }
+
+    // ============================================================
+    //  PAGE: ASK - Submit Questions
+    // ============================================================
+
+    async function submitQuestion() {
+      const input = document.getElementById('askInput');
+      const nameInput = document.getElementById('askName');
+      const text = input.value.trim();
+      if (!text) { showToast('请输入你的问题 😅'); return; }
+
+      const isPublic = document.getElementById('askPublic').checked;
+      const res = await api('/api/questions', {
+        method: 'POST',
+        body: JSON.stringify({ text, name: nameInput.value.trim() || '匿名', isPublic }),
+      });
+      if (res.success) {
+        input.value = '';
+        nameInput.value = '';
+        showToast('✅ 提问已发送！');
+        renderPublicQuestions();
+      } else {
+        showToast(res.error || '发送失败');
+      }
+    }
+
+    let dateFilterDate = '';
+
+    function setDateFilter(date) {
+      dateFilterDate = date;
+      renderPublicQuestions();
+    }
+
+    function clearDateFilter() {
+      dateFilterDate = '';
+      document.getElementById('dateFilterInput').value = '';
+      renderPublicQuestions();
+    }
+
+    async function renderPublicQuestions() {
+      const container = document.getElementById('publicQuestions');
+      const res = await api('/api/questions/public');
+      let list = res.questions || [];
+
+      // Apply date filter
+      if (dateFilterDate) {
+        const filterStart = new Date(dateFilterDate + 'T00:00:00+08:00').getTime();
+        const filterEnd = filterStart + 86400000;
+        list = list.filter(q => q.time >= filterStart && q.time < filterEnd);
+      }
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="date-filter-row">
+            <input type="date" id="dateFilterInput" value="${dateFilterDate}" onchange="setDateFilter(this.value)">
+            ${dateFilterDate ? '<button class="filter-btn clear" onclick="clearDateFilter()">✕ 清除</button>' : '<button class="filter-btn" onclick="document.getElementById(\'dateFilterInput\').showPicker()">📅 按日期查看</button>'}
+          </div>
+          <div class="empty-state"><div class="icon">💭</div><p>${dateFilterDate ? '该日期没有公开提问' : '还没有提问，来做第一个吧！'}</p></div>
+        `;
+        return;
+      }
+      const likedFromStorage = JSON.parse(localStorage.getItem('askbox_liked') || '{}');
+      container.innerHTML = `
+        <div class="date-filter-row">
+          <input type="date" id="dateFilterInput" value="${dateFilterDate}" onchange="setDateFilter(this.value)">
+          ${dateFilterDate ? '<button class="filter-btn clear" onclick="clearDateFilter()">✕ 清除</button>' : ''}
+        </div>
+        ${list.map(q => {
+        const timeStr = formatTime(q.time);
+        const communityAnswers = q.communityAnswers || [];
+        const isLiked = likedFromStorage['q_' + q.id];
+        return `
+          <div class="public-q-item">
+            <div class="q-text">${q.featured ? '<span class="q-featured-badge">⭐</span>' : ''}${escHtml(q.text)}</div>
+            <div class="q-meta">
+              <span>— ${escHtml(q.name)}</span>
+              <span>${q.answered ? '<span class="q-tag answered">已回复</span>' : '<span class="q-tag">待回复</span>'} · ${timeStr}</span>
+            </div>
+            ${q.answered ? `<div style="margin-top:10px;padding:10px 12px;background:var(--primary-light);border-radius:10px;font-size:14px;line-height:1.6">
+              <div style="font-size:11px;color:var(--primary-dark);font-weight:500;margin-bottom:4px">Baichou 的回答</div>
+              ${escHtml(q.answer)}
+            </div>` : ''}
+            ${(q.followUps || []).length ? `
+              <div style="margin-top:10px">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">🔄 追问</div>
+                ${(q.followUps || []).map(f => `
+                  <div style="margin-bottom:8px;padding:8px 12px;background:#F5F4F8;border-radius:8px;font-size:13px;line-height:1.5">
+                    <div style="margin-bottom:4px"><span style="font-weight:500">追问:</span> ${escHtml(f.text)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">— ${escHtml(f.name)}</div>
+                    ${f.answer ? `<div style="padding:8px 10px;background:var(--primary-light);border-radius:8px;margin-top:4px">
+                      <div style="font-size:11px;color:var(--primary-dark);font-weight:500;margin-bottom:2px">回答:</div>
+                      ${escHtml(f.answer)}
+                    </div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+            ${communityAnswers.length ? `
+              <div style="margin-top:10px">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">💬 大家的回应</div>
+                ${communityAnswers.map(a => `
+                  <div style="margin-bottom:6px;padding:8px 12px;background:#F5F4F8;border-radius:8px;font-size:13px;line-height:1.5">
+                    <div>${escHtml(a.text)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px">— ${escHtml(a.name)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+            <div style="margin-top:8px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <button class="q-like-btn${isLiked ? ' liked' : ''}" onclick="toggleLike(${q.id},this)">${isLiked ? '❤️' : '🤍'} <span class="count">${q.likesCount || 0}</span></button>
+              ${q.answered ? `<button onclick="toggleFollowupForm(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 8px 4px 0">🔄 追问</button>` : ''}
+              <button onclick="toggleCommunityForm(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 0">✏️ 回应</button>
+              ${q.answered ? `<button onclick="makePublicCard(${q.id})" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;padding:4px 0;margin-left:4px">🎴 卡片</button>` : ''}
+              <div id="communityForm_${q.id}" style="display:none;margin-top:8px;width:100%">
+                <input type="text" id="commName_${q.id}" placeholder="你的名字（选填）" style="width:100%;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;margin-bottom:6px">
+                <textarea id="commText_${q.id}" placeholder="写下你的回应……" style="width:100%;min-height:50px;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;resize:vertical;margin-bottom:6px"></textarea>
+                <button onclick="submitCommunityAnswer(${q.id})" style="padding:6px 14px;font-size:12px;font-weight:500;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer">发送回应 💬</button>
+              </div>
+              <div id="followupForm_${q.id}" style="display:none;margin-top:8px;width:100%">
+                <input type="text" id="fuName_${q.id}" placeholder="你的名字（选填）" style="width:100%;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;margin-bottom:6px">
+                <textarea id="fuText_${q.id}" placeholder="写下你的追问……" style="width:100%;min-height:50px;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;resize:vertical;margin-bottom:6px"></textarea>
+                <button onclick="submitFollowup(${q.id})" style="padding:6px 14px;font-size:12px;font-weight:500;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer">发送追问 🔄</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+      `;
+    }
+
+    function toggleCommunityForm(id) {
+      const el = document.getElementById('communityForm_' + id);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function toggleFollowupForm(id) {
+      const el = document.getElementById('followupForm_' + id);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function submitFollowup(id) {
+      const text = document.getElementById('fuText_' + id).value.trim();
+      const name = document.getElementById('fuName_' + id).value.trim();
+      if (!text) { showToast('请输入追问内容 😅'); return; }
+      const res = await api('/api/questions/' + id + '/followup', {
+        method: 'POST',
+        body: JSON.stringify({ text, name }),
+      });
+      if (res.success) {
+        document.getElementById('fuText_' + id).value = '';
+        document.getElementById('fuName_' + id).value = '';
+        showToast('✅ 追问已发送！');
+        renderPublicQuestions();
+      } else {
+        showToast(res.error || '发送失败');
+      }
+    }
+
+    async function submitCommunityAnswer(id) {
+      const text = document.getElementById('commText_' + id).value.trim();
+      const name = document.getElementById('commName_' + id).value.trim();
+      if (!text) { showToast('请输入回应内容 😅'); return; }
+      const res = await api('/api/questions/' + id + '/community-answer', {
+        method: 'POST',
+        body: JSON.stringify({ text, name }),
+      });
+      if (res.success) {
+        document.getElementById('commText_' + id).value = '';
+        document.getElementById('commName_' + id).value = '';
+        showToast('✅ 回应已发送！');
+        renderPublicQuestions();
+      } else {
+        showToast(res.error || '发送失败');
+      }
+    }
+
+    // ============================================================
+    //  PAGE: ADMIN
+    // ============================================================
+
+    async function adminLogin() {
+      const pwd = document.getElementById('adminPwd').value;
+      const res = await api('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ password: pwd }),
+      });
+      if (res.success) {
+        adminToken = pwd;
+        sessionStorage.setItem('askbox_admin_token', pwd);
+        state.password = pwd;
+        document.getElementById('adminLogin').style.display = 'none';
+        document.getElementById('adminDashboard').classList.add('active');
+        showAdminNav();
+        await refreshState();
+        renderAdminList();
+        showToast('欢迎回来 👋');
+      } else {
+        showToast('密码错误 🔒');
+      }
+    }
+
+    function adminLogout() {
+      adminToken = '';
+      sessionStorage.removeItem('askbox_admin_token');
+      document.getElementById('adminLogin').style.display = 'flex';
+      document.getElementById('adminDashboard').classList.remove('active');
+      document.getElementById('adminPwd').value = '';
+      hideAdminNav();
+      navigate('ask');
+    }
+
+    async function refreshState() {
+      const res = await api('/api/admin/questions');
+      if (res.questions) {
+        state.questions = res.questions;
+        state.name = res.name;
+        state.cardBg = res.cardBg || 'lavender';
+        state.cardCustomColor = res.cardCustomColor || '#F5E8FF';
+        state.bgImage = res.bgImage || null;
+        state.cardBgImage = res.cardBgImage || null;
+      }
+    }
+
+    let currentFilter = 'all';
+
+    function filterQuestions(filter, el) {
+      currentFilter = filter;
+      document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+      if (el) el.classList.add('active');
+      renderAdminList();
+    }
+
+    async function renderAdminList() {
+      if (!state.questions.length && adminToken) await refreshState();
+
+      const total = state.questions.length;
+      const pending = state.questions.filter(q => !q.answered).length;
+      const answered = state.questions.filter(q => q.answered).length;
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statPending').textContent = pending;
+      document.getElementById('statAnswered').textContent = answered;
+      document.getElementById('adminSubtitle').textContent = `共 ${total} 条提问 · ${pending} 条待回复`;
+
+      const container = document.getElementById('adminQuestionList');
+      let list = state.questions;
+      if (currentFilter === 'pending') list = list.filter(q => !q.answered);
+      if (currentFilter === 'answered') list = list.filter(q => q.answered);
+
+      if (list.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无提问</p></div>';
+        return;
+      }
+
+      container.innerHTML = list.map(q => {
+        const timeStr = formatTime(q.time);
+        const statusClass = q.answered ? 'answered' : 'pending';
+        const statusText = q.answered ? '✅ 已回复' : '⏳ 待回复';
+        return `
+          <div class="q-item ${q.answered ? 'answered' : ''}" data-id="${q.id}">
+            <div class="q-clickable" onclick="toggleExpand(${q.id})">
+              <div class="q-header">
+                <div>
+                  <div class="q-text">${escHtml(q.text)}</div>
+                  <div class="q-name">— ${escHtml(q.name)} · ${timeStr} ${q.ip ? `<span style="font-size:11px;color:var(--text-muted)">IP: ${q.ip}</span>` : ''}</div>
+                </div>
+                <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                  ${q.public ? '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#EEEBFF;color:#7C5CFC">🌐 公开</span>' : '<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:#F3F4F6;color:#6B7280">🔒 私密</span>'}
+                  <span class="q-status ${statusClass}">${statusText}</span>
+                </div>
+              </div>
+              ${q.answered ? `<div class="q-answer"><div class="q-answer-label">💬 你的回答</div>${escHtml(q.answer)}</div>` : ''}
+            </div>
+            <div class="q-actions" onclick="event.stopPropagation()">
+              ${(q.followUps || []).length ? `
+                <div style="margin-bottom:12px;padding:12px;background:#F5F4F8;border-radius:10px">
+                  <div style="font-size:13px;font-weight:600;color:var(--text-light);margin-bottom:8px">🔄 追问 (${(q.followUps || []).length})</div>
+                  ${(q.followUps || []).map(f => `
+                    <div style="margin-bottom:8px;padding:8px 10px;background:white;border-radius:8px;font-size:13px;line-height:1.5">
+                      <div><span style="font-weight:500">追问:</span> ${escHtml(f.text)}</div>
+                      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">— ${escHtml(f.name)}</div>
+                      ${f.answered ? `
+                        <div style="margin-top:6px;padding:8px;background:var(--primary-light);border-radius:6px">
+                          <div style="font-size:11px;color:var(--primary-dark);font-weight:500">你的回答:</div>
+                          ${escHtml(f.answer)}
+                        </div>
+                      ` : `
+                        <textarea id="fuAnswerInput_${q.id}_${f.id}" placeholder="回答这条追问……" style="width:100%;min-height:50px;padding:8px 10px;font-size:13px;background:#F5F4F8;border:none;border-radius:8px;resize:vertical;margin-top:6px"></textarea>
+                        <button onclick="event.stopPropagation();saveFollowupAnswer(${q.id},${f.id})" style="margin-top:4px;padding:5px 12px;font-size:12px;font-weight:500;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer">💾 回答追问</button>
+                      `}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+              <textarea id="answerInput_${q.id}" placeholder="写下你的回答……">${q.answer || ''}</textarea>
+              <div class="btn-row">
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();saveAnswer(${q.id})">💾 保存回答</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();toggleFeatured(${q.id})">${q.featured ? '🌟 取消精选' : '⭐ 设为精选'}</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();deleteQuestion(${q.id})">🗑️ 删除</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();toggleVisibility(${q.id})">${q.public ? '🔒 设为私密' : '🌐 设为公开'}</button>
+                <button class="btn btn-sm" style="background:var(--primary);color:white" onclick="event.stopPropagation();saveAndMakeCard(${q.id})">🎨 制作卡片</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleExpand(id) {
+      const el = document.querySelector(`.q-item[data-id="${id}"]`);
+      if (!el) return;
+      // Only toggle if click was on the clickable area, not on buttons/textarea
+      el.classList.toggle('expanded');
+    }
+
+    async function saveAnswer(id) {
+      const input = document.getElementById('answerInput_' + id);
+      const answer = input.value.trim();
+      if (!answer) { showToast('请输入回答内容 😅'); return; }
+      const res = await api('/api/admin/questions/' + id + '/answer', {
+        method: 'POST',
+        body: JSON.stringify({ answer }),
+      });
+      if (res.success) {
+        showToast('✅ 回答已保存');
+        await refreshState();
+        renderAdminList();
+      } else {
+        showToast(res.error || '保存失败');
+      }
+    }
+
+    async function saveFollowupAnswer(qid, fid) {
+      const input = document.getElementById('fuAnswerInput_' + qid + '_' + fid);
+      const answer = input.value.trim();
+      if (!answer) { showToast('请输入回答内容 😅'); return; }
+      const res = await api('/api/admin/questions/' + qid + '/followup/' + fid + '/answer', {
+        method: 'POST',
+        body: JSON.stringify({ answer }),
+      });
+      if (res.success) {
+        showToast('✅ 追问已回答');
+        await refreshState();
+        renderAdminList();
+      } else {
+        showToast(res.error || '保存失败');
+      }
+    }
+
+    async function toggleVisibility(id) {
+      const res = await api('/api/admin/questions/' + id + '/toggle-visibility', { method: 'POST' });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast(res.public ? '🌐 已设为公开' : '🔒 已设为私密');
+      }
+    }
+
+    async function toggleFeatured(id) {
+      const res = await api('/api/admin/questions/' + id + '/toggle-featured', { method: 'POST' });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast(res.featured ? '⭐ 已设为精选' : '🌟 已取消精选');
+      }
+    }
+
+    async function deleteQuestion(id) {
+      if (!confirm('确定删除这条提问？')) return;
+      const res = await api('/api/admin/questions/' + id, { method: 'DELETE' });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast('🗑️ 已删除');
+      }
+    }
+
+    function saveAndMakeCard(id) {
+      const input = document.getElementById('answerInput_' + id);
+      const answer = input.value.trim();
+      if (!answer) { showToast('请先写下回答再制作卡片 😅'); return; }
+      const q = findCardQuestion(id);
+      if (q) { q.answer = answer; q.answered = true; }
+      api('/api/admin/questions/' + id + '/answer', {
+        method: 'POST',
+        body: JSON.stringify({ answer }),
+      });
+      renderAdminList();
+      navigate('card');
+      const select = document.getElementById('cardQuestionSelect');
+      setTimeout(() => {
+        select.value = id;
+        onCardQuestionChange();
+      }, 100);
+    }
+
+    async function generateTestQuestion() {
+      const prompts = [
+        "为什么人总在深夜最清醒？",
+        "你觉得爱是本能还是选择？",
+        "有没有一句话，让你突然释怀了？",
+        "你相信「对的人」会出现吗？",
+        "如何接受一段关系的结束？",
+        "人长大是从学会闭嘴开始的吗？",
+        "你是怎么和自己和解的？",
+        "如果有机会对过去的自己说句话，你会说什么？",
+        "你会在什么时候感到孤独？",
+        "努力了也没有结果，还要继续吗？",
+        "你觉得理性的人更痛苦还是感性的人更痛苦？",
+        "你怀念的到底是一个人，还是一段时光？",
+      ];
+      const randomName = ['北极星', '夜航船', '匿名者', '失眠患者', '过路人', '坠落星辰', '雾中人', '风的旅人'].sort(() => Math.random() - 0.5)[0];
+      const res = await api('/api/questions', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: prompts[Math.floor(Math.random() * prompts.length)],
+          name: randomName,
+          isPublic: false,
+        }),
+      });
+      if (res.success) {
+        await refreshState();
+        renderAdminList();
+        showToast('✨ 生成了一条测试提问');
+      }
+    }
+
+    // ============================================================
+    //  PAGE: CARD GENERATOR
+    // ============================================================
+
+    let cardPublicData = []; // cached public answered questions for card page
+
+    async function populateCardSelect() {
+      const select = document.getElementById('cardQuestionSelect');
+      // If admin has full data, use it; otherwise fetch public answered questions
+      let answered, pending;
+      if (state.questions.length > 0) {
+        answered = state.questions.filter(q => q.answered && q.answer.trim());
+        pending = state.questions.filter(q => !q.answered);
+      } else {
+        const res = await api('/api/questions/public');
+        cardPublicData = (res.questions || []).filter(q => q.answered && q.answer);
+        answered = cardPublicData;
+        pending = [];
+      }
+      let html = '<option value="">— 选择一条提问 —</option>';
+      if (answered.length) {
+        html += '<optgroup label="✅ 已回答">';
+        answered.forEach(q => {
+          const preview = q.text.length > 30 ? q.text.slice(0, 30) + '…' : q.text;
+          html += `<option value="${q.id}">${escHtml(preview)}</option>`;
+        });
+        html += '</optgroup>';
+      }
+      if (pending.length) {
+        html += '<optgroup label="⏳ 待回答">';
+        pending.forEach(q => {
+          const preview = q.text.length > 30 ? q.text.slice(0, 30) + '…' : q.text;
+          html += `<option value="${q.id}">${escHtml(preview)}</option>`;
+        });
+        html += '</optgroup>';
+      }
+      select.innerHTML = html;
+
+      // If navigated from public page with a specific question, pre-select it
+      if (state._cardPublicData) {
+        const data = state._cardPublicData;
+        // Try to find it in the select options
+        setTimeout(() => {
+          if (select.querySelector(`option[value="${data.id}"]`)) {
+            select.value = data.id;
+          }
+          onCardQuestionChange();
+          state._cardPublicData = null;
+        }, 100);
+      }
+    }
+
+    let currentBg = 'lavender';
+    const bgMap = {
+      lavender: 'linear-gradient(135deg, #F5E8FF 0%, #E8F0FF 100%)',
+      warm: 'linear-gradient(135deg, #FFF0E8 0%, #FFE8F0 100%)',
+      mint: 'linear-gradient(135deg, #E8FFEE 0%, #E8F5FF 100%)',
+      pink: 'linear-gradient(135deg, #F0E8FF 0%, #FFE8F5 100%)',
+      ice: 'linear-gradient(135deg, #E8EFFF 0%, #F5E8FF 100%)',
+    };
+
+    function selectBg(name, el) {
+      currentBg = name;
+      document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      state.cardBg = name;
+      applyCardBg();
+    }
+
+    function setCustomBg(color) {
+      currentBg = 'custom';
+      document.querySelectorAll('.bg-opt').forEach(b => b.classList.remove('active'));
+      state.cardCustomColor = color;
+      document.getElementById('customColorText').value = color;
+      state.cardBg = 'custom';
+      applyCardBg();
+    }
+
+    function applyCardBg() {
+      const card = document.getElementById('answerCard');
+      if (currentBg === 'custom') {
+        card.style.background = state.cardCustomColor || '#F5E8FF';
+      } else if (currentBg === 'image' && state.cardBgImage) {
+        card.style.background = '';
+        card.style.backgroundImage = 'url(' + state.cardBgImage + ')';
+        card.style.backgroundSize = 'cover';
+        card.style.backgroundPosition = 'center';
+      } else {
+        card.style.background = bgMap[currentBg] || bgMap.lavender;
+      }
+    }
+
+    function findCardQuestion(id) {
+      if (state.questions.length > 0) {
+        return state.questions.find(q => q.id === id);
+      }
+      return cardPublicData.find(q => q.id === id);
+    }
+
+    function onCardQuestionChange() {
+      const select = document.getElementById('cardQuestionSelect');
+      const id = parseInt(select.value);
+      if (!id) {
+        document.getElementById('cardQText').textContent = '选择左侧提问即可预览';
+        document.getElementById('cardAText').textContent = '在这里写下你的回答……';
+        return;
+      }
+      const q = findCardQuestion(id);
+      if (q) {
+        document.getElementById('cardQText').textContent = q.text;
+        if (q.answered && q.answer) {
+          document.getElementById('cardAText').textContent = q.answer;
+        } else {
+          document.getElementById('cardAText').textContent = '（待回答）';
+        }
+      }
+    }
+
+    function downloadCard() {
+      const card = document.getElementById('answerCard');
+      const select = document.getElementById('cardQuestionSelect');
+      if (!select.value) { showToast('请先选择一条提问 🎨'); return; }
+      const text = document.getElementById('cardQText').textContent;
+      if (text === '选择左侧提问即可预览') { showToast('请先选择一条提问 🎨'); return; }
+
+      showToast('🎨 正在生成卡片…');
+
+      html2canvas(card, {
+        scale: 2.5,
+        backgroundColor: null,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+      }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = '提问箱卡片_' + Date.now() + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('✅ 卡片已下载！');
+      }).catch(err => {
+        console.error(err);
+        showToast('生成失败，试试截图吧 📸');
+      });
+    }
+
+    // ============================================================
+    //  QR MODAL
+    // ============================================================
+
+    function showQrModal() {
+      const modal = document.getElementById('qrModal');
+      modal.classList.add('show');
+
+      const container = document.getElementById('qrcodeContainer');
+      container.innerHTML = '';
+
+      const url = window.location.href.split('#')[0] + (window.location.href.includes('#') ? '' : '');
+      document.getElementById('shareUrl').textContent = url;
+
+      try {
+        new QRCode(container, {
+          text: url,
+          width: 200,
+          height: 200,
+          colorDark: '#1F1F2D',
+          colorLight: '#FFFFFF',
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+      } catch(e) {
+        setTimeout(() => {
+          container.innerHTML = '';
+          new QRCode(container, { text: url, width: 200, height: 200 });
+        }, 100);
+      }
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModal').classList.remove('show');
+    }
+
+    function copyShareUrl() {
+      const url = document.getElementById('shareUrl').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('📋 已复制链接');
+      }).catch(() => {
+        const el = document.createElement('textarea');
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast('📋 已复制链接');
+      });
+    }
+
+    document.getElementById('qrModal').addEventListener('click', function(e) {
+      if (e.target === this) closeQrModal();
+    });
+
+    // ============================================================
+    //  PAGE: SETTINGS
+    // ============================================================
+
+    function changeAvatar(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const url = e.target.result;
+        document.getElementById('settingsAvatar').src = url;
+        document.getElementById('askAvatar').src = url;
+        document.getElementById('cardAvatar').src = url;
+        state._avatarDataUrl = url;
+        showToast('✅ 头像已更新（仅本地）');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ============================================================
+    //  BACKGROUND IMAGES
+    // ============================================================
+
+    async function uploadBgImage(type, input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('图片太大，请小于 5MB');
+        input.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const res = await api('/api/admin/upload', {
+          method: 'POST',
+          body: JSON.stringify({ image: e.target.result, type }),
+        });
+        if (res.success) {
+          if (type === 'bg') {
+            state.bgImage = res.url;
+          } else {
+            state.cardBgImage = res.url;
+          }
+          showToast('✅ 背景已更新');
+          applySettings();
+        } else {
+          showToast(res.error || '上传失败');
+        }
+        input.value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeBgImage() {
+      if (!confirm('确定移除提问箱背景图片？')) return;
+      state.bgImage = null;
+      applySettings();
+      showToast('✅ 背景已移除');
+    }
+
+    function removeCardBgImage() {
+      if (!confirm('确定移除卡片背景图片？')) return;
+      state.cardBgImage = null;
+      applySettings();
+      showToast('✅ 卡片背景已移除');
+    }
+
+    async function saveSettings() {
+      const name = document.getElementById('settingsName').value.trim() || 'Baichou';
+      const pwd = document.getElementById('settingsPwd').value.trim();
+
+      const body = { name, cardBg: state.cardBg, cardCustomColor: state.cardCustomColor };
+
+      // If new password entered, send it with old password verification
+      if (pwd && pwd !== state.password) {
+        body.password = pwd;
+        body.oldPassword = adminToken;
+      }
+
+      const res = await api('/api/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+
+      if (res.success) {
+        state.name = name;
+        if (pwd && pwd !== state.password) {
+          state.password = pwd;
+          adminToken = pwd;
+          sessionStorage.setItem('askbox_admin_token', pwd);
+          document.getElementById('settingsPwd').value = '';
+          showToast('✅ 密码已更新');
+        } else {
+          showToast('✅ 设置已保存');
+        }
+        applySettings();
+      } else {
+        showToast(res.error || '保存失败');
+      }
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(state.questions, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '提问箱数据_' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📦 数据已导出');
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            state.questions = imported;
+            showToast('✅ JSON 已加载到本地预览');
+          } else {
+            showToast('❌ 文件格式不对，请导出完整数据');
+          }
+        } catch(e) {
+          showToast('❌ 文件解析失败');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function clearAllData() {
+      if (!confirm('确定要清空所有数据？此操作不可撤销！')) return;
+      showToast('请在管理后台逐条删除，或直接操作服务器 data/db.json 文件');
+    }
+
+    // ============================================================
+    //  HELPERS
+    // ============================================================
+
+    function escHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      const now = new Date();
+      const diff = now - d;
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayDiff = Math.floor((today - msgDate) / 86400000);
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+      if (dayDiff === 1) return '昨天';
+      return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    }
+
+    async function toggleLike(id, btn) {
+      const res = await api('/api/questions/' + id + '/like', { method: 'POST' });
+      if (res.success) {
+        const liked = JSON.parse(localStorage.getItem('askbox_liked') || '{}');
+        liked['q_' + id] = res.liked;
+        localStorage.setItem('askbox_liked', JSON.stringify(liked));
+        btn.innerHTML = (res.liked ? '❤️' : '🤍') + ' <span class="count">' + res.likesCount + '</span>';
+        btn.classList.toggle('liked', res.liked);
+      }
+    }
+
+    async function makePublicCard(id) {
+      // Fetch from public API and find the question, then navigate to card
+      const res = await api('/api/questions/public');
+      const q = (res.questions || []).find(q => q.id === id);
+      if (q && q.answered && q.answer) {
+        state._cardPublicData = { id: q.id, text: q.text, answer: q.answer };
+      }
+      navigate('card');
+    }
+
+    function applySettings() {
+      document.querySelectorAll('.card-name').forEach(el => el.textContent = state.name);
+      document.querySelectorAll('.page-header h1').forEach(el => {
+        if (el.textContent.includes('提问箱')) el.textContent = state.name + ' · 提问箱';
+      });
+      document.getElementById('cardWatermark').textContent = state.name + ' · 匿名提问箱';
+      document.getElementById('settingsName').value = state.name;
+      document.getElementById('settingsPwd').value = '';
+
+      if (state._avatarDataUrl) {
+        document.querySelectorAll('img[id$="Avatar"], img.avatar').forEach(img => {
+          img.src = state._avatarDataUrl;
+        });
+      }
+
+      // Apply custom background images
+      const bgPreview = document.getElementById('bgPreview');
+      if (bgPreview) {
+        if (state.bgImage) {
+          bgPreview.style.background = '';
+          bgPreview.style.backgroundImage = 'url(' + state.bgImage + ')';
+          bgPreview.style.backgroundSize = 'cover';
+          bgPreview.style.backgroundPosition = 'center';
+          document.getElementById('bgRemoveBtn').style.display = 'block';
+        } else {
+          bgPreview.style.backgroundImage = '';
+          bgPreview.style.background = 'var(--gradient-1)';
+          document.getElementById('bgRemoveBtn').style.display = 'none';
+        }
+      }
+      const cardBgPreview = document.getElementById('cardBgPreview');
+      if (cardBgPreview) {
+        if (state.cardBgImage) {
+          cardBgPreview.style.background = '';
+          cardBgPreview.style.backgroundImage = 'url(' + state.cardBgImage + ')';
+          cardBgPreview.style.backgroundSize = 'cover';
+          cardBgPreview.style.backgroundPosition = 'center';
+          document.getElementById('cardBgRemoveBtn').style.display = 'block';
+        } else {
+          cardBgPreview.style.backgroundImage = '';
+          cardBgPreview.style.background = 'var(--gradient-1)';
+          document.getElementById('cardBgRemoveBtn').style.display = 'none';
+        }
+      }
+
+      // Apply bg image to page background
+      const pageAsk = document.getElementById('page-ask');
+      if (pageAsk) {
+        if (state.bgImage) {
+          pageAsk.style.backgroundImage = 'url(' + state.bgImage + ')';
+          pageAsk.style.backgroundSize = 'cover';
+          pageAsk.style.backgroundPosition = 'center';
+          pageAsk.style.backgroundAttachment = 'fixed';
+          pageAsk.style.minHeight = '100vh';
+        } else {
+          pageAsk.style.backgroundImage = '';
+          pageAsk.style.backgroundAttachment = '';
+        }
+      }
+
+      if (state.cardBg && state.cardBg !== 'custom') {
+        currentBg = state.cardBg;
+        document.querySelectorAll('.bg-opt').forEach(b => {
+          b.classList.toggle('active', b.dataset.bg === state.cardBg);
+        });
+      } else if (state.cardBg === 'custom' && state.cardCustomColor) {
+        currentBg = 'custom';
+        document.getElementById('customColor').value = state.cardCustomColor;
+        document.getElementById('customColorText').value = state.cardCustomColor;
+      }
+      applyCardBg();
+    }
+
+    // ============================================================
+    //  INIT
+    // ============================================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+      applySettings();
+      initApp();
+
+      // Restore admin session if token exists
+      if (adminToken) {
+        fetch(API_BASE + '/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminToken }),
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            document.getElementById('adminLogin').style.display = 'none';
+            document.getElementById('adminDashboard').classList.add('active');
+            showAdminNav();
+            refreshState().then(() => renderAdminList());
+          } else {
+            adminToken = '';
+            sessionStorage.removeItem('askbox_admin_token');
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
